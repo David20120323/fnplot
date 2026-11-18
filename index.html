@@ -1,0 +1,3881 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>函数图像绘制器</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2f6bdb">
+<meta name="description" content="函数图像、3D 曲面与几何作图三合一">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="函数图像">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='7' fill='%23fff' stroke='%23d6dce6' stroke-width='1.2'/%3E%3Cpath d='M2 16h28M16 2v28' stroke='%2317191d' stroke-width='1.8'/%3E%3Cpath d='M3.5 20c3-12 6.5 8 9.5 1.5s6.2-6 9.6 3' stroke='%232f6bdb' stroke-width='3.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  color:#1b1e23;background:#eceef1;-webkit-tap-highlight-color:transparent;
+  font-variant-numeric:tabular-nums;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+}
+button{font-family:inherit}
+.app{
+  --kh:46px;
+  position:relative;display:flex;flex-direction:column;
+  width:var(--aw,100%);height:var(--ah,100dvh);
+  max-width:100%;max-height:100dvh;
+  background:#fff;overflow:hidden;user-select:none;
+}
+.app.is-win{
+  border-radius:18px;border:1px solid rgba(15,20,28,.08);
+  box-shadow:0 18px 44px rgba(15,22,34,.16),0 2px 6px rgba(15,22,34,.05);
+}
+
+/* ---------- 窗口缩放把手 ---------- */
+.rz{position:absolute;z-index:50;touch-action:none;display:none}
+.app.rz-on .rz{display:block}
+.rz-n{top:0;left:16px;right:16px;height:7px;cursor:ns-resize}
+.rz-s{bottom:0;left:16px;right:16px;height:7px;cursor:ns-resize}
+.rz-w{left:0;top:16px;bottom:16px;width:7px;cursor:ew-resize}
+.rz-e{right:0;top:16px;bottom:16px;width:7px;cursor:ew-resize}
+.rz-nw{left:0;top:0;width:15px;height:15px;cursor:nwse-resize}
+.rz-ne{right:0;top:0;width:15px;height:15px;cursor:nesw-resize}
+.rz-sw{left:0;bottom:0;width:15px;height:15px;cursor:nesw-resize}
+.rz-se{right:0;bottom:0;width:15px;height:15px;cursor:nwse-resize}
+.rz-se::after{
+  content:"";position:absolute;right:3px;bottom:3px;width:7px;height:7px;
+  border-right:2px solid rgba(47,107,219,.34);border-bottom:2px solid rgba(47,107,219,.34);
+  border-radius:0 0 3px 0;
+}
+.app.rz-on .rz-n:hover,.app.rz-on .rz-s:hover{background:rgba(47,107,219,.1)}
+.app.rz-on .rz-w:hover,.app.rz-on .rz-e:hover{background:rgba(47,107,219,.1)}
+.app.resizing{user-select:none}
+
+/* ---------- 顶部模式切换 ---------- */
+.topbar{
+  flex:0 0 auto;display:flex;justify-content:center;align-items:center;
+  padding:8px 10px 9px;background:#f1f2f4;border-bottom:1px solid #ebedef;
+}
+.tabs{display:inline-flex;gap:2px;padding:3px;background:#e7e9eb;border-radius:999px}
+.tab{
+  border:0;background:transparent;font-size:13.5px;letter-spacing:.01em;
+  color:#8b919a;padding:7px 15px;border-radius:999px;cursor:pointer;
+  transition:background .16s,color .16s;
+}
+.tab.is-active{background:#fff;color:#2f6bdb;font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.09)}
+.tab:not(.is-active):active{color:#5c626b}
+
+/* ---------- 绘图区 ---------- */
+.stage{position:relative;flex:1 1 auto;min-height:132px;background:#fff;overflow:hidden}
+#cv{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+.app.mode-three #cv{cursor:grab}
+.app.mode-geo #cv{cursor:pointer}
+
+.fab{
+  position:absolute;top:10px;right:10px;width:38px;height:38px;border-radius:10px;
+  border:1px solid #e3e5e9;background:#f7f8fa;color:#5b616a;
+  display:grid;place-items:center;cursor:pointer;box-shadow:0 1px 2px rgba(16,24,40,.05);
+}
+.fab:active{background:#eceef1}
+
+.zoomctl{
+  position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;
+  border:1px solid #e3e5e9;border-radius:10px;overflow:hidden;
+  background:rgba(247,248,250,.94);box-shadow:0 1px 2px rgba(16,24,40,.05);
+}
+.zoomctl button{
+  width:33px;height:31px;border:0;background:transparent;color:#5b616a;
+  cursor:pointer;display:grid;place-items:center;
+}
+.zoomctl button+button{border-top:1px solid #eceef1}
+.zoomctl button:active{background:#eceef1}
+.zoomctl svg{width:15px;height:15px}
+
+.caption{
+  position:absolute;left:12px;bottom:11px;font-size:11.5px;color:#98a0a9;
+  pointer-events:none;max-width:calc(100% - 110px);line-height:1.5;
+}
+
+.readout{
+  position:absolute;left:10px;top:10px;min-width:104px;
+  padding:7px 10px 8px;border:1px solid #e4e6ea;border-radius:9px;
+  background:rgba(255,255,255,.96);box-shadow:0 2px 8px rgba(16,24,40,.07);
+  font-size:12px;line-height:1.62;pointer-events:none;color:#464c55;
+}
+.readout .ro-x{font-weight:600;color:#20242a;margin-bottom:2px}
+.readout .ro-line{display:flex;align-items:center;gap:6px}
+.readout .ro-line i{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.readout .ro-line span{white-space:nowrap}
+
+/* ---------- 工具栏 ---------- */
+.toolbar{
+  flex:0 0 auto;height:47px;display:flex;align-items:center;gap:2px;
+  padding:0 6px;background:#f1f2f4;border-top:1px solid #ebeced;
+}
+.tbtn{
+  width:38px;height:38px;border:0;background:transparent;border-radius:9px;
+  color:#3f444b;cursor:pointer;display:grid;place-items:center;
+}
+.tbtn:active{background:#e2e4e8}
+.tbtn[disabled]{color:#c4c8cf;cursor:default}
+.tbtn[disabled]:active{background:transparent}
+.tbtn svg{width:19px;height:19px}
+.tbtn.plus{font-size:22px;font-weight:400;line-height:1}
+.spacer{flex:1}
+
+/* ---------- 表达式面板 ---------- */
+.rows{
+  flex:0 0 auto;background:#fff;max-height:32vh;overflow-y:auto;
+  border-bottom:1px solid #eceef1;
+}
+.row{
+  display:grid;grid-template-columns:26px 46px minmax(0,1fr);align-items:stretch;
+  min-height:54px;background:#fff;border-bottom:1px solid #eff0f2;
+  position:relative;transition:background .15s;
+}
+.row:last-child{border-bottom:0}
+.row.is-error{background:#fdf4f3}
+.rownum{
+  grid-row:1 / -1;display:flex;align-items:flex-start;justify-content:center;
+  padding-top:11px;font-size:11.5px;color:#9aa1ab;background:#fbfbfc;
+  border-right:1px solid #eff0f2;
+}
+.swatch{
+  grid-row:1 / -1;border:0;padding:9px 0 0;background:#fff;cursor:pointer;
+  display:flex;align-items:flex-start;justify-content:center;
+}
+.badge{
+  width:27px;height:27px;border-radius:50%;background:var(--c);color:#fff;
+  display:grid;place-items:center;font-size:12px;font-weight:600;
+  box-shadow:0 1px 2px rgba(16,24,40,.16);transition:opacity .15s;opacity:.86;
+}
+.row.is-active .badge{opacity:1}
+.badge svg{width:15px;height:15px;stroke:currentColor}
+.field{grid-column:3;display:flex;align-items:center;min-width:0;padding-right:2px}
+.field.is-active{box-shadow:inset 0 1.5px 0 #2f6bdb,inset 0 -1.5px 0 #2f6bdb}
+.row input{
+  flex:1;min-width:0;height:100%;border:0;outline:0;background:transparent;
+  padding:0 6px 0 8px;font-family:inherit;font-size:16.5px;color:#1b1e23;
+}
+.row input::placeholder{color:#bbc0c8;font-size:15px}
+.row .val{font-size:12.5px;color:#868d96;white-space:nowrap;padding-right:4px}
+.row .val .veq{margin-right:3px}
+.row .lenin{
+  width:52px;height:24px;flex:0 0 auto;border:0;border-bottom:1px dashed #cdd2da;
+  background:transparent;outline:0;text-align:right;padding:0 2px;
+  font-family:inherit;font-size:12.5px;color:#5c636d;
+}
+.row .lenin:focus{border-bottom-color:#2f6bdb;color:#2f6bdb;background:#f5f8ff}
+.row .degin{width:44px}
+.row .degsign{font-size:12.5px;color:#868d96}
+.shape-list{display:flex;flex-direction:column;gap:8px;margin:8px 0 4px}
+.shape-opt{
+  display:flex;align-items:center;gap:10px;width:100%;padding:11px 12px;
+  border:1px solid #e4e7ec;border-radius:10px;background:#fafbfc;cursor:pointer;
+  font-family:inherit;text-align:left;
+}
+.shape-opt b{flex:0 0 auto;font-size:14.5px;font-weight:600;color:#20242a;min-width:78px}
+.shape-opt span{font-size:12.5px;color:#8a9099}
+.shape-opt.is-on{border-color:#bfd4fb;background:#eff5ff}
+.shape-opt.is-on b{color:#2f6bdb}
+.shape-opt:active{background:#f0f2f5}
+.row .clr{
+  width:40px;flex:0 0 40px;border:0;background:transparent;cursor:pointer;
+  color:#b7bcc4;display:grid;place-items:center;
+}
+.row .clr:active{color:#7d838c}
+.row .clr svg{width:15px;height:15px}
+.row .dombtn{
+  flex:0 0 auto;max-width:104px;height:25px;margin-right:2px;padding:0 9px;
+  border:1px solid #e2e5ea;border-radius:13px;background:#f6f7f9;color:#8b919a;
+  font-family:inherit;font-size:11.5px;font-weight:600;letter-spacing:.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;
+}
+.row .dombtn.on{color:#2f6bdb;border-color:#cbdcfa;background:#eef4ff}
+.row .dombtn:active{background:#e7eaf0}
+.dom-grp{margin-bottom:14px}
+.dom-line{display:flex;align-items:center;gap:8px}
+.dom-var{width:18px;flex:0 0 18px;font-style:italic;font-size:16px;color:#3a3f47}
+.dom-in{
+  flex:1;min-width:0;height:40px;border:1px solid #dfe2e8;border-radius:9px;
+  padding:0 10px;font-family:inherit;font-size:16px;color:#1b1f26;background:#fff;
+}
+.dom-in:focus{outline:none;border-color:#2f6bdb;box-shadow:0 0 0 3px rgba(47,107,219,.12)}
+.dom-arrow{color:#aeb4bf;font-size:13px}
+.dom-flags{display:flex;gap:16px;margin-top:8px;padding-left:26px;font-size:12.5px;color:#7d848d}
+.dom-flags label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.dom-tip{margin:2px 0 0;font-size:12.5px;line-height:1.6;color:#8a909b}
+.row .sub{
+  grid-column:3;display:flex;align-items:center;gap:8px;
+  padding:0 8px 9px 8px;margin-top:-4px;
+}
+.row .sub label{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#7d848d;cursor:pointer}
+.row .sub input{width:15px;height:15px;flex:0 0 15px;accent-color:#2f6bdb;margin:0}
+.row .sub .gtag{
+  font-size:12px;line-height:1.55;color:#5f6670;background:#f4f5f7;
+  border-radius:6px;padding:2.5px 8px;white-space:nowrap;
+}
+.row .sub.circ-sub{flex-wrap:wrap;gap:4px 14px}
+.row .sub .circ-row{display:flex;align-items:center;gap:6px}
+.row .sub .ceq{font-size:12px;color:#9aa1ab}
+.row .sub .cirin{
+  width:52px;height:22px;flex:0 0 52px;border:0;border-bottom:1px dashed #cdd2da;
+  background:transparent;text-align:right;padding:0 2px;outline:0;
+  font-family:inherit;font-size:12px;color:#5c636d;
+}
+.row .sub .cirin:focus{border-bottom-color:#2f6bdb;color:#2f6bdb;background:#f5f8ff}
+
+/* ---------- 几何工具条 ---------- */
+.geobar{
+  flex:0 0 auto;display:none;align-items:center;gap:3px;height:46px;
+  padding:0 8px;background:#f7f8fa;border-bottom:1px solid #ebedef;
+}
+.app.mode-geo .geobar{display:flex}
+.gtool{
+  width:40px;height:36px;border:0;background:transparent;border-radius:8px;
+  color:#4a4f57;display:grid;place-items:center;cursor:pointer;
+}
+.gtool:active{background:#e6e8eb}
+.gtool.is-on{background:#dfeafa;color:#2f6bdb}
+.gtool svg{width:20px;height:20px}
+.gsep{width:1px;height:26px;background:#e4e6ea;margin:0 4px}
+
+/* ---------- 3D 视图切换 ---------- */
+.viewctl{position:absolute;right:10px;top:56px;display:none;flex-direction:column;gap:6px}
+.app.mode-three .viewctl{display:flex}
+.viewctl button{
+  width:36px;height:36px;border:1px solid #e3e5e9;border-radius:10px;
+  background:rgba(247,248,250,.95);color:#5b616a;display:grid;place-items:center;cursor:pointer;
+}
+.viewctl button.is-on{background:#fff;color:#2f6bdb;border-color:#c7d9f9}
+.viewctl svg{width:18px;height:18px}
+
+.homefab{
+  position:absolute;right:10px;top:10px;width:38px;height:38px;border-radius:10px;
+  border:1px solid #e3e5e9;background:#f7f8fa;color:#5b616a;display:none;
+  place-items:center;cursor:pointer;box-shadow:0 1px 2px rgba(16,24,40,.05);
+}
+.app.mode-geo .homefab{display:grid}
+.homefab:active{background:#eceef1}
+.homefab svg{width:18px;height:18px}
+
+/* ---------- 3D 方框范围 ---------- */
+.rangefab{
+  position:absolute;left:10px;top:10px;display:none;align-items:center;gap:5px;
+  height:32px;padding:0 10px;border-radius:16px;border:1px solid #e3e5e9;
+  background:rgba(247,248,250,.95);color:#5b616a;cursor:pointer;
+  font-family:inherit;font-size:12.5px;box-shadow:0 1px 2px rgba(16,24,40,.05);
+}
+.app.mode-three .rangefab{display:flex}
+.rangefab:active{background:#eceef1}
+.rangefab svg{width:16px;height:16px}
+.rangefab #range-txt{font-weight:600;color:#4c535d}
+
+.stat{
+  display:none;align-items:center;gap:4px;height:30px;padding:0 9px;margin:0 2px;
+  border:1px solid #e3e5e9;border-radius:15px;background:#f7f8fa;
+  font-size:12.5px;color:#5b616a;
+}
+.app.mode-geo .stat{display:flex}
+
+.errbar{
+  flex:0 0 auto;display:none;padding:6px 14px;background:#fdf4f3;color:#c0392b;
+  font-size:11.5px;line-height:1.5;border-bottom:1px solid #f2dedb;
+}
+.errbar.on{display:block}
+
+/* ---------- 键盘 ---------- */
+.keyboard{flex:0 0 auto;background:#e9eaec;padding:6px}
+.app.mode-geo .keyboard{display:none}
+.app.mode-geo.kb-geo .keyboard{display:block}
+.app.kb-off .keyboard{display:none}
+.kb{display:grid;grid-template-columns:repeat(9,1fr);gap:6px;grid-auto-rows:var(--kh)}
+.kb[hidden]{display:none}
+.key{
+  border:0;background:#fff;color:#4a4f57;font-size:16px;border-radius:8px;
+  display:grid;place-items:center;cursor:pointer;padding:0;
+  box-shadow:0 1px 0 rgba(16,24,40,.06);
+  transition:background .1s,transform .06s;
+  min-width:0;
+}
+.key:active{background:#f3f4f6;transform:scale(.965)}
+.key sup{font-size:.6em;vertical-align:super;line-height:0}
+.key.fn{background:#d8dade;color:#3c4148;font-size:14px;box-shadow:none}
+.key.fn:active{background:#cccfd4}
+.key.ret{background:#2f63d9;color:#fff}
+.key.ret:active{background:#2756bf}
+.key svg{width:19px;height:19px}
+.key-nav{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.kb-let .key{font-size:15px}
+
+/* ---------- 几何底栏 ---------- */
+.geo-bar{
+  flex:0 0 auto;display:none;align-items:center;gap:8px;padding:8px 10px 9px;
+  background:#f1f2f4;border-top:1px solid #ebeced;
+}
+.geo-bar .ghint{flex:1;font-size:12px;color:#8b919a;line-height:1.45}
+.geo-bar button{
+  height:34px;padding:0 13px;border:1px solid #e0e2e6;border-radius:9px;
+  background:#fff;color:#4a4f57;font-size:12.5px;cursor:pointer;
+}
+.geo-bar button:active{background:#f0f1f3}
+
+/* ---------- 弹层 ---------- */
+.overlay{
+  position:absolute;inset:0;z-index:20;background:rgba(15,20,28,.34);
+  display:flex;align-items:flex-end;
+  opacity:0;pointer-events:none;transition:opacity .18s;
+}
+.overlay.on{opacity:1;pointer-events:auto}
+.sheet{
+  width:100%;max-height:82%;overflow:auto;background:#fff;
+  border-radius:16px 16px 0 0;padding:0 0 16px;
+  transform:translateY(14px);transition:transform .2s;
+}
+.overlay.on .sheet{transform:translateY(0)}
+.sh-head{
+  position:sticky;top:0;background:#fff;display:flex;align-items:center;
+  padding:13px 14px 10px;border-bottom:1px solid #f0f1f3;
+}
+.sh-head h3{margin:0;font-size:15px;font-weight:600;flex:1;color:#20242a}
+.sh-close{
+  width:32px;height:32px;border:0;background:transparent;color:#9aa0a8;
+  cursor:pointer;display:grid;place-items:center;font-size:20px;border-radius:8px;
+}
+.sh-close:active{background:#f2f3f5}
+.sh-body{padding:6px 14px 4px}
+.set-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 0;border-bottom:1px solid #f3f4f6;font-size:14px;color:#33383f;
+}
+.set-row:last-of-type{border-bottom:0}
+.set-sel{
+  font:inherit;font-size:14px;color:#33383f;background:#f5f6f8;
+  border:1px solid #e3e5e9;border-radius:8px;padding:6px 10px;outline:none;
+  -webkit-appearance:none;appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,#8a9099 50%),linear-gradient(135deg,#8a9099 50%,transparent 50%);
+  background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;
+  background-size:5px 5px,5px 5px;background-repeat:no-repeat;
+  padding-right:26px;
+}
+.set-num{
+  width:82px;font:inherit;font-size:14px;color:#33383f;background:#f5f6f8;
+  border:1px solid #e3e5e9;border-radius:8px;padding:6px 10px;outline:none;text-align:right;
+}
+.set-num:focus{border-color:#2f6bdb;background:#fff}
+
+/* ---------- 调色盘 ---------- */
+.pal-grid{
+  display:grid;grid-template-columns:repeat(6,1fr);gap:14px 10px;
+  padding:14px 0 6px;justify-items:center;
+}
+.pal-dot{
+  width:34px;height:34px;border-radius:50%;border:0;padding:0;cursor:pointer;
+  background:var(--c);box-shadow:0 0 0 1px rgba(16,24,40,.10),0 1px 3px rgba(16,24,40,.14);
+}
+.pal-dot.is-on{box-shadow:0 0 0 3px #fff,0 0 0 5px #2f6bdb}
+.pal-dot:active{transform:scale(.94)}
+.switch{position:relative;display:inline-block;width:44px;height:26px;flex:0 0 44px}.switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:1}
+.switch i{
+  position:absolute;inset:0;background:#d5d8dd;border-radius:999px;transition:background .18s;
+}
+.switch i::after{
+  content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.18);transition:transform .18s;
+}
+.switch input:checked+i{background:#2f6bdb}
+.switch input:checked+i::after{transform:translateX(18px)}
+.sheet-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.sheet-btns button{
+  height:44px;border:1px solid #e0e2e6;border-radius:10px;background:#fff;
+  color:#3f444b;font-size:13.5px;cursor:pointer;
+}
+.sheet-btns button:active{background:#f3f4f6}
+.sheet-btns button.wide{grid-column:1 / -1}
+.sheet-btns button.danger{color:#c0392b;border-color:#f0dcd9}
+.fn-groups{display:flex;flex-direction:column;gap:12px;padding-top:8px}
+.fn-group h4{margin:0 0 7px;font-size:12px;color:#8b919a;font-weight:500;letter-spacing:.04em}
+.fn-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.fn-grid button{
+  height:41px;border:1px solid #e5e7eb;border-radius:9px;background:#fff;
+  color:#33383f;font-size:14px;cursor:pointer;
+}
+.fn-grid button:active{background:#f1f2f4;border-color:#d5d8dd}
+
+/* ---------- Toast ---------- */
+.toast{
+  position:absolute;left:50%;top:calc(50% + 4px);transform:translate(-50%,-50%) scale(.96);
+  background:rgba(28,32,38,.92);color:#fff;font-size:12.5px;
+  padding:9px 15px;border-radius:10px;max-width:78%;text-align:center;
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:30;
+}
+.toast.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+/* ---------- 桌面端外壳 ---------- */
+@media (min-width:720px){
+  .app{
+    --kh:44px;
+    width:var(--aw,486px);height:var(--ah,min(940px,calc(100dvh - 44px)));
+    border-radius:24px;overflow:hidden;border:1px solid rgba(15,20,28,.08);
+    box-shadow:0 18px 44px rgba(15,22,34,.16),0 2px 6px rgba(15,22,34,.05);
+  }
+}
+@media (max-height:740px){.app{--kh:41px}}
+@media (max-height:660px){.app{--kh:37px}.row{height:48px}.toolbar{height:43px}}
+@media (max-height:580px){.app{--kh:33px}.row{height:44px}.toolbar{height:40px}.stage{min-height:96px}.key{font-size:14px}.key.fn{font-size:12px}}
+@media (max-width:360px){
+  .tab{padding:7px 11px;font-size:12.5px}
+  .key{font-size:15px}
+  .key.fn{font-size:12.5px}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="rz rz-n" data-dir="n" title="拖动调整高度"></div>
+  <div class="rz rz-s" data-dir="s" title="拖动调整高度"></div>
+  <div class="rz rz-w" data-dir="w" title="拖动调整宽度"></div>
+  <div class="rz rz-e" data-dir="e" title="拖动调整宽度"></div>
+  <div class="rz rz-nw" data-dir="nw" title="拖动调整大小"></div>
+  <div class="rz rz-ne" data-dir="ne" title="拖动调整大小"></div>
+  <div class="rz rz-sw" data-dir="sw" title="拖动调整大小"></div>
+  <div class="rz rz-se" data-dir="se" title="拖动调整大小"></div>
+
+  <!-- ===== 顶部模式切换 ===== -->
+  <header class="topbar">
+    <div class="tabs" role="tablist" aria-label="绘图模式">
+      <button class="tab is-active" role="tab" aria-selected="true" data-tab="func">函数图像</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="three">3D图形</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="geo">几何图形</button>
+    </div>
+  </header>
+
+  <!-- ===== 几何工具条 ===== -->
+  <div class="geobar" id="geobar">
+    <button class="gtool is-on" data-tool="select" title="选择 / 移动" aria-label="选择 / 移动">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l7.8 18 2.6-6.6 6.4-2.8z" fill="currentColor" fill-opacity=".08"/><path d="M13 15l4.5 5"/></svg>
+    </button>
+    <span class="gsep"></span>
+    <button class="gtool" data-tool="point" title="点" aria-label="点">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.6" fill="currentColor" fill-opacity=".85"/></svg>
+    </button>
+    <button class="gtool" data-tool="segment" title="线段" aria-label="线段">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 19l15-14"/><circle cx="4.4" cy="18.8" r="2" fill="currentColor"/><circle cx="19.2" cy="4.6" r="2" fill="currentColor"/></svg>
+    </button>
+    <button class="gtool" data-tool="circle" title="圆" aria-label="圆">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="12" r="7.4"/><circle cx="11" cy="12" r="1.9" fill="currentColor"/></svg>
+    </button>
+    <button class="gtool" data-tool="angle" title="角" aria-label="角">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 20l14-12"/><path d="M9 20l7-6"/><path d="M9.4 18.4a4 4 0 0 1 2.6-3.6"/></svg>
+    </button>
+    <button class="gtool" data-tool="polygon" title="多边形" aria-label="多边形">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6l8.2 6-3.1 9.6h-10.2l-3.1-9.6z"/></svg>
+    </button>
+    <button class="gtool" data-tool="perp" title="两线垂直（过一点作垂线）" aria-label="垂线">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"/><path d="M12 18V4"/><path d="M9.4 18v-2.6h2.6"/></svg>
+    </button>
+    <button class="gtool" data-tool="parallel" title="两线平行（过一点作平行线）" aria-label="平行线">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 15.4L14.6 5"/><path d="M8.4 20L19.6 9.6"/><circle cx="19.6" cy="9.6" r="1.9" fill="currentColor"/><circle cx="8.4" cy="20" r="1.9" fill="currentColor"/></svg>
+    </button>
+    <button class="gtool" data-tool="midpoint" title="两点中点" aria-label="两点中点">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 18l16-12"/><circle cx="4.6" cy="17.6" r="1.9" fill="currentColor"/><circle cx="18.8" cy="4.6" r="1.9" fill="currentColor"/><circle cx="11.8" cy="11.2" r="2.7" fill="currentColor"/></svg>
+    </button>
+    <button class="gtool" data-tool="onobj" title="对象上的点（可沿函数、线段或圆滑动）" aria-label="对象上的点">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 16.5c3.4 0 3.4-8 8-8s4.4 8 8 4"/><circle cx="11" cy="8.5" r="3" fill="currentColor" fill-opacity=".85" stroke="none"/></svg>
+    </button>
+  </div>
+
+  <!-- ===== 画布 ===== -->
+  <section class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="readout" id="readout" hidden></div>
+
+    <button class="fab" id="btn-settings" title="设置" aria-label="设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+      </svg>
+    </button>
+
+    <div class="zoomctl" id="zoomctl">
+      <button data-zoom="in" title="放大" aria-label="放大">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button data-zoom="out" title="缩小" aria-label="缩小">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg>
+      </button>
+      <button data-zoom="reset" title="回到原点" aria-label="回到原点">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+      </button>
+    </div>
+
+    <div class="viewctl" id="viewctl">
+      <button data-view="3d" class="is-on" title="立体视图" aria-label="立体视图">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6l8.4 4.7v9.4L12 21.4 3.6 16.7V7.3z"/><path d="M12 21.4v-9.3M3.6 7.3l8.4 4.8 8.4-4.8"/></svg>
+      </button>
+      <button data-view="grid" title="俯视网格" aria-label="俯视网格">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3.4" y="3.4" width="17.2" height="17.2" rx="1.4"/><path d="M3.4 9.2h17.2M3.4 14.8h17.2M9.2 3.4v17.2M14.8 3.4v17.2"/></svg>
+      </button>
+    </div>
+
+    <button class="rangefab" id="btn-3drange" title="修改 3D 方框的范围" aria-label="修改 3D 方框的范围">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l7.4 4.2v9.2L12 20.8 4.6 16.6V7.4z"/><path d="M4.6 7.4L12 11.6l7.4-4.2M12 11.6v9.2"/></svg>
+      <span id="range-txt">±5</span>
+    </button>
+
+    <button class="homefab" id="btn-home" title="回到默认视角" aria-label="回到默认视角">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.4l8-6.6 8 6.6"/><path d="M6.4 10.4V20h11.2v-9.6"/></svg>
+    </button>
+
+    <div class="caption" id="caption">拖动平移 · 滚轮或双指缩放</div>
+  </section>
+
+  <!-- ===== 工具栏 ===== -->
+  <div class="toolbar" id="toolbar">
+    <button class="tbtn plus" id="btn-add" title="新增表达式" aria-label="新增表达式">+</button>
+    <div class="stat" id="geo-stat" title="几何对象数量">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6l8.2 6-3.1 9.6h-10.2l-3.1-9.6z"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg>
+      <span id="geo-count">0</span>
+    </div>
+    <div class="spacer"></div>
+    <button class="tbtn" id="btn-undo" title="撤销" aria-label="撤销" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 8H5v-4"/><path d="M5 8c5.4-3.6 12-1.9 14 2.2 2 4.1.5 9.1-3.6 11.1-3 1.5-6.2.8-8.2-1.3"/></svg>
+    </button>
+    <button class="tbtn" id="btn-redo" title="重做" aria-label="重做" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8h4v-4"/><path d="M19 8c-5.4-3.6-12-1.9-14 2.2-2 4.1-.5 9.1 3.6 11.1 3 1.5 6.2.8 8.2-1.3"/></svg>
+    </button>
+    <div class="spacer"></div>
+    <button class="tbtn" id="btn-gear" title="设置" aria-label="设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"/><path d="M19.4 14.9a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.2-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h.6a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.2a1.6 1.6 0 0 0-1.4 1z"/></svg>
+    </button>
+    <button class="tbtn" id="btn-kb" title="收起键盘" aria-label="收起键盘">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/><path d="M6 15l6 6 6-6"/></svg>
+    </button>
+  </div>
+
+  <!-- ===== 表达式面板 ===== -->
+  <div class="rows" id="rows"></div>
+  <div class="errbar" id="errbar"></div>
+
+  <!-- ===== 键盘 ===== -->
+  <div class="keyboard" id="keyboard">
+    <div class="kb" id="kb-num">
+      <button class="key" data-ins="x">x</button>
+      <button class="key" data-ins="y">y</button>
+      <button class="key" data-ins="^2" title="平方">a²</button>
+      <button class="key" data-ins="^" title="乘方">aᵇ</button>
+      <button class="key" data-ins="7">7</button>
+      <button class="key" data-ins="8">8</button>
+      <button class="key" data-ins="9">9</button>
+      <button class="key" data-ins="/">÷</button>
+      <button class="key fn" data-act="fn">功能</button>
+
+      <button class="key" data-ins="(">(</button>
+      <button class="key" data-ins=")">)</button>
+      <button class="key" data-ins="&lt;">&lt;</button>
+      <button class="key" data-ins="&gt;">&gt;</button>
+      <button class="key" data-ins="4">4</button>
+      <button class="key" data-ins="5">5</button>
+      <button class="key" data-ins="6">6</button>
+      <button class="key" data-ins="*">×</button>
+      <div class="key-nav">
+        <button class="key" data-act="left" title="光标左移" aria-label="光标左移">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 12H6M11 7l-5 5 5 5"/></svg>
+        </button>
+        <button class="key" data-act="right" title="光标右移" aria-label="光标右移">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h13M13 7l5 5-5 5"/></svg>
+        </button>
+      </div>
+
+      <button class="key" data-ins="abs(" title="绝对值">|a|</button>
+      <button class="key" data-ins=",">,</button>
+      <button class="key" data-ins="≤">≤</button>
+      <button class="key" data-ins="≥">≥</button>
+      <button class="key" data-ins="1">1</button>
+      <button class="key" data-ins="2">2</button>
+      <button class="key" data-ins="3">3</button>
+      <button class="key" data-ins="-">−</button>
+      <button class="key fn" data-act="del" title="删除" aria-label="删除">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 5H9l-6 7 6 7h11a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="M13 9l5 6M18 9l-5 6"/></svg>
+      </button>
+
+      <button class="key fn" data-act="letters" id="btn-abc">ABC</button>
+      <button class="key fn" data-act="sound" id="btn-sound" title="按键音" aria-label="按键音">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.2L12 5.2v13.6L7.2 14.5H4z"/><path d="M16 9.2a4 4 0 0 1 0 5.6" opacity=".85"/><path d="M18.6 6.6a7.6 7.6 0 0 1 0 10.8" opacity=".55"/></svg>
+      </button>
+      <button class="key" data-ins="sqrt(" title="根号">√</button>
+      <button class="key" data-ins="π">π</button>
+      <button class="key" data-ins="0">0</button>
+      <button class="key" data-ins=".">.</button>
+      <button class="key" data-ins="=">=</button>
+      <button class="key" data-ins="+">+</button>
+      <button class="key ret" data-act="ret" title="换行新建" aria-label="换行新建">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 7v5a3 3 0 0 1-3 3H6"/><path d="M10 11l-4 4 4 4"/></svg>
+      </button>
+    </div>
+    <div class="kb kb-let" id="kb-let" hidden></div>
+  </div>
+
+  <div class="overlay" id="overlay" aria-hidden="true"></div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+'use strict';
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+const COLORS=['#3d7be0','#e0574c','#22a06b','#9254de','#0e9aa8','#e08a1e'];
+
+/* ================= 表达式解析（词法 → 递归下降 → 求值） ================= */
+const CONSTS={pi:Math.PI,e:Math.E};
+const FUNCS={
+  sin:{n:1,f:x=>Math.sin(x)},cos:{n:1,f:x=>Math.cos(x)},tan:{n:1,f:x=>Math.tan(x)},
+  cot:{n:1,f:x=>1/Math.tan(x)},sec:{n:1,f:x=>1/Math.cos(x)},csc:{n:1,f:x=>1/Math.sin(x)},
+  asin:{n:1,f:x=>Math.asin(x)},acos:{n:1,f:x=>Math.acos(x)},atan:{n:1,f:x=>Math.atan(x)},
+  sinh:{n:1,f:x=>Math.sinh(x)},cosh:{n:1,f:x=>Math.cosh(x)},tanh:{n:1,f:x=>Math.tanh(x)},
+  sqrt:{n:1,f:x=>Math.sqrt(x)},cbrt:{n:1,f:x=>Math.cbrt(x)},abs:{n:1,f:x=>Math.abs(x)},
+  exp:{n:1,f:x=>Math.exp(x)},ln:{n:1,f:x=>Math.log(x)},log:{n:1,f:x=>Math.log10(x)},
+  log10:{n:1,f:x=>Math.log10(x)},log2:{n:1,f:x=>Math.log2(x)},
+  floor:{n:1,f:x=>Math.floor(x)},ceil:{n:1,f:x=>Math.ceil(x)},round:{n:1,f:x=>Math.round(x)},
+  sign:{n:1,f:x=>Math.sign(x)},
+  max:{n:'2+',f:(...a)=>Math.max(...a)},min:{n:'2+',f:(...a)=>Math.min(...a)},
+  mod:{n:2,f:(a,b)=>((a%b)+b)%b},pow:{n:2,f:(a,b)=>Math.pow(a,b)},atan2:{n:2,f:(a,b)=>Math.atan2(a,b)}
+};
+
+function tokenize(input){
+  const s=String(input).replace(/\s+/g,'')
+    .replace(/π/g,'pi').replace(/×/g,'*').replace(/÷/g,'/')
+    .replace(/[−–]/g,'-').replace(/²/g,'^2').replace(/³/g,'^3');
+  const tk=[];
+  let i=0;
+  while(i<s.length){
+    const c=s[i];
+    if((c>='0'&&c<='9')||c==='.'){
+      let j=i,dot=false;
+      while(j<s.length&&((s[j]>='0'&&s[j]<='9')||(s[j]==='.'&&!dot))){
+        if(s[j]==='.')dot=true;
+        j++;
+      }
+      const v=parseFloat(s.slice(i,j));
+      if(!isFinite(v)) throw new Error('数字写法有误');
+      tk.push({t:'num',v:v});
+      i=j;continue;
+    }
+    if((c>='a'&&c<='z')||(c>='A'&&c<='Z')){
+      let j=i;
+      while(j<s.length&&((s[j]>='a'&&s[j]<='z')||(s[j]>='A'&&s[j]<='Z')))j++;
+      let w=s.slice(i,j).toLowerCase();
+      if(w==='log'&&(s[j]==='1'||s[j]==='2')){
+        if(s.substr(j,2)==='10'){w='log10';j+=2;}
+        else if(s[j]==='2'){w='log2';j+=1;}
+      }
+      if(FUNCS[w]||CONSTS[w]) tk.push({t:'id',v:w});
+      else if(w==='x'||w==='y') tk.push({t:'id',v:w});
+      else{
+        let ok=true;
+        for(const ch of w){ if(!(FUNCS[ch]||CONSTS[ch]||ch==='x'||ch==='y')){ok=false;break;} }
+        if(!ok) throw new Error('无法识别的符号 “'+w+'”');
+        for(const ch of w) tk.push({t:'id',v:ch});
+      }
+      i=j;continue;
+    }
+    if('+-*/^'.indexOf(c)>=0){ tk.push({t:'op',v:c});i++;continue; }
+    if('(),'.indexOf(c)>=0){ tk.push({t:c});i++;continue; }
+    if(c==='|'){ tk.push({t:'|'});i++;continue; }
+    if(c==='=') throw new Error('等号只写在开头，例如 y=x^2');
+    if('<>≤≥'.indexOf(c)>=0) throw new Error('暂不支持不等式，请输入等号表达式');
+    throw new Error('无法识别的字符 “'+c+'”');
+  }
+  if(!tk.length) throw new Error('请输入一个表达式');
+  return tk;
+}
+
+function parse(input){
+  const tk=tokenize(input);
+  let p=0;
+  const peek=()=>tk[p];
+  function expect(ch,msg){
+    const x=tk[p];
+    if(!x||x.t!==ch) throw new Error(msg||'括号不匹配');
+    p++;
+  }
+  function primary(){
+    const x=peek();
+    if(!x) throw new Error('表达式不完整');
+    if(x.t==='num'){ p++;return {k:'num',v:x.v}; }
+    if(x.t==='('){ p++;const n=expr();expect(')','缺少右括号 )');return n; }
+    if(x.t==='|'){ p++;const n=expr();expect('|','绝对值缺少结尾的 |');return {k:'fn',name:'abs',args:[n]}; }
+    if(x.t==='id'){
+      const name=x.v;p++;
+      if(FUNCS[name]){
+        if(peek()&&peek().t==='('){
+          p++;
+          const args=[expr()];
+          while(peek()&&peek().t===','){ p++;args.push(expr()); }
+          expect(')','缺少右括号 )');
+          const need=FUNCS[name].n;
+          if(typeof need==='number'&&args.length!==need) throw new Error(name+' 需要 '+need+' 个参数');
+          if(need==='2+'&&args.length<2) throw new Error(name+' 至少需要 2 个参数');
+          return {k:'fn',name:name,args:args};
+        }
+        throw new Error('“'+name+'” 后面要跟括号，例如 '+name+'(x)');
+      }
+      if(CONSTS[name]) return {k:'num',v:CONSTS[name]};
+      if(name==='x'||name==='y') return {k:'var',name:name};
+      throw new Error('未知符号 '+name);
+    }
+    throw new Error('表达式语法有误');
+  }
+  function power(){
+    const base=primary();
+    const x=peek();
+    if(x&&x.t==='op'&&x.v==='^'){ p++;return {k:'bin',op:'^',l:base,r:unary()}; }
+    return base;
+  }
+  function unary(){
+    const x=peek();
+    if(x&&x.t==='op'&&(x.v==='-'||x.v==='+')){
+      p++;
+      const n=unary();
+      return x.v==='-'?{k:'neg',a:n}:n;
+    }
+    return power();
+  }
+  function term(){
+    let n=unary();
+    for(;;){
+      const x=peek();
+      if(!x) break;
+      if(x.t==='op'&&(x.v==='*'||x.v==='/')){
+        p++;n={k:'bin',op:x.v,l:n,r:unary()};continue;
+      }
+      if(x.t==='num'||x.t==='id'||x.t==='('||x.t==='|'){
+        n={k:'bin',op:'*',l:n,r:unary()};continue;
+      }
+      break;
+    }
+    return n;
+  }
+  function expr(){
+    let n=term();
+    for(;;){
+      const x=peek();
+      if(x&&x.t==='op'&&(x.v==='+'||x.v==='-')){
+        p++;n={k:'bin',op:x.v,l:n,r:term()};continue;
+      }
+      break;
+    }
+    return n;
+  }
+  const ast=expr();
+  if(p<tk.length) throw new Error('表达式结尾有多余内容');
+  return ast;
+}
+
+function makeEvaluator(ast){
+  function ev(n,v){
+    switch(n.k){
+      case 'num': return n.v;
+      case 'var': return n.name==='x'?v.x:v.y;
+      case 'neg': return -ev(n.a,v);
+      case 'bin':{
+        const a=ev(n.l,v),b=ev(n.r,v);
+        if(n.op==='+')return a+b;
+        if(n.op==='-')return a-b;
+        if(n.op==='*')return a*b;
+        if(n.op==='/')return a/b;
+        return Math.pow(a,b);
+      }
+      case 'fn':{
+        const args=n.args.map(function(t){return ev(t,v);});
+        return FUNCS[n.name].f.apply(null,args);
+      }
+    }
+    return NaN;
+  }
+  return function(v){ return ev(ast,v); };
+}
+
+/* ---- 定义域：从表达式尾部解析 "a<=x<=b" 之类的区间 ---- */
+function splitTopComma(s){
+  const out=[];let dep=0,cur='';
+  for(let i=0;i<s.length;i++){
+    const c=s.charAt(i);
+    if(c==='(') dep++;
+    else if(c===')') dep--;
+    if(c===','&&dep===0){ out.push(cur);cur=''; }
+    else cur+=c;
+  }
+  out.push(cur);
+  return out;
+}
+function evalConst(s){
+  try{
+    const ev=makeEvaluator(parse(String(s).trim()));
+    const v=ev({x:0,y:0});
+    return (typeof v==='number'&&isFinite(v))?v:null;
+  }catch(e){ return null; }
+}
+function parseRangeSeg(seg,V){
+  const g=String(seg||'').trim();
+  if(!g) return null;
+  let m=g.match(new RegExp('^(.+?)\\s*(<=|≤|<)\\s*'+V+'\\s*(<=|≤|<)\\s*(.+)$'));
+  if(m){
+    const a=evalConst(m[1]),b=evalConst(m[4]);
+    if(a!==null&&b!==null){
+      return {lo:Math.min(a,b),hi:Math.max(a,b),loOpen:m[2]==='<',hiOpen:m[3]==='<'};
+    }
+  }
+  m=g.match(new RegExp('^'+V+'\\s*(>=|≥|>)\\s*(.+)$'));
+  if(m){
+    const v=evalConst(m[2]);
+    if(v!==null) return {lo:v,loOpen:(m[1]==='>')};
+  }
+  m=g.match(new RegExp('^'+V+'\\s*(<=|≤|<)\\s*(.+)$'));
+  if(m){
+    const v=evalConst(m[2]);
+    if(v!==null) return {hi:v,hiOpen:(m[1]==='<')};
+  }
+  m=g.match(new RegExp('^(.+?)\\s*(<=|≤|<)\\s*'+V+'\\s*$'));
+  if(m){
+    const v=evalConst(m[1]);
+    if(v!==null) return {lo:v,loOpen:(m[2]==='<')};
+  }
+  return null;
+}
+function parseDomain(text,mode){
+  const parts=splitTopComma(text);
+  const keep=[parts[0]];
+  const dom={};
+  for(let i=1;i<parts.length;i++){
+    const seg=parts[i];
+    const rx=parseRangeSeg(seg,'x');
+    if(rx){
+      if(typeof rx.lo==='number'&&dom.xLo===undefined){ dom.xLo=rx.lo;dom.xLoOpen=!!rx.loOpen; }
+      if(typeof rx.hi==='number'&&dom.xHi===undefined){ dom.xHi=rx.hi;dom.xHiOpen=!!rx.hiOpen; }
+      continue;
+    }
+    if(mode==='three'){
+      const ry=parseRangeSeg(seg,'y');
+      if(ry){
+        if(typeof ry.lo==='number'&&dom.yLo===undefined){ dom.yLo=ry.lo;dom.yLoOpen=!!ry.loOpen; }
+        if(typeof ry.hi==='number'&&dom.yHi===undefined){ dom.yHi=ry.hi;dom.yHiOpen=!!ry.hiOpen; }
+        continue;
+      }
+    }
+    keep.push(seg);
+  }
+  const has=(dom.xLo!==undefined||dom.xHi!==undefined||dom.yLo!==undefined||dom.yHi!==undefined);
+  return {body:keep.join(',').trim(),dom:has?dom:null};
+}
+
+function compileText(text,mode){
+  let t=String(text||'').trim();
+  if(mode==='three') t=t.replace(/^(z|f\s*\(\s*x\s*,\s*y\s*\))\s*=\s*/i,'');
+  else t=t.replace(/^y\s*=\s*/i,'');
+  if(!t) return {empty:true};
+  const pd=parseDomain(t,mode);
+  if(!pd.body) return {empty:true,dom:pd.dom};
+  try{
+    const ast=parse(pd.body);
+    return {fn:makeEvaluator(ast),dom:pd.dom,body:pd.body};
+  }catch(e){
+    return {err:e.message,dom:pd.dom,body:pd.body};
+  }
+}
+
+/* ================= 状态 ================= */
+const app=$('#app'), cv=$('#cv'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1,userView=false;
+
+const S={
+  tab:'func',
+  exprs:[{id:1,text:'',color:COLORS[0],fn:null,err:null}],
+  activeId:1,
+  view:{cx:0,cy:0,unit:34},
+  showGrid:true,showLabels:true,trace:true,
+  kbVisible:true,kbMode:'num',sound:false,
+  dec:2,
+  geo:{objs:[],tool:'select',pend:[],sel:null,drag:null,detail:false,shape:'poly',pbase:null},
+  three:{az:-0.62,pitch:0.6,scale:1,view:'3d',rx:5,ry:5,rz:5},
+  hover:null
+};
+try{
+  const dv=parseInt(localStorage.getItem('fnplot.dec'),10);
+  if(dv>=0&&dv<=4) S.dec=dv;
+}catch(err){}
+const GDOT=['#3d7be0','#22a06b','#9254de','#e0574c','#0e9aa8','#e08a1e'];
+const GSHAPE=['#e0574c','#3d7be0','#22a06b','#e08a1e','#0e9aa8','#9254de'];
+
+/* ================= 坐标换算 ================= */
+function worldX(px){ return S.view.cx+(px-W/2)/S.view.unit; }
+function worldY(py){ return S.view.cy-(py-H/2)/S.view.unit; }
+function toX(wx){ return W/2+(wx-S.view.cx)*S.view.unit; }
+function toY(wy){ return H/2-(wy-S.view.cy)*S.view.unit; }
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+
+function niceStep(min){
+  if(!isFinite(min)||min<=0) return 1;
+  const p=Math.pow(10,Math.floor(Math.log10(min)));
+  const m=min/p;
+  const n=m<=1?1:m<=2?2:m<=5?5:10;
+  return n*p;
+}
+function decimalsOf(step){
+  let d=0,s=step;
+  while(s<1-1e-9&&d<6){ s*=10;d++; }
+  return d;
+}
+function pickLabelStep(unit,halfH){
+  const cand=[];
+  for(let k=-4;k<=4;k++){
+    [1,2,5].forEach(function(m){ cand.push(m*Math.pow(10,k)); });
+  }
+  cand.sort(function(a,b){ return a-b; });
+  const minPx=54/unit;
+  for(let i=0;i<cand.length;i++){
+    const st=cand[i];
+    if(st<minPx-1e-9) continue;
+    if(halfH/st>=1.15) return st;
+  }
+  return niceStep(minPx);
+}
+function fmt(v,step){
+  if(Math.abs(v)<step*1e-6) v=0;
+  if(Math.abs(v)>=1e5) return v.toExponential(1).replace('+','');
+  let s=step,d=0;
+  while(s<1-1e-9&&d<6){ s*=10;d++; }
+  let str=v.toFixed(Math.min(d,6));
+  if(str.indexOf('.')>=0) str=str.replace(/0+$/,'').replace(/\.$/,'');
+  if(str==='-0') str='0';
+  return str;
+}
+function fmtNum(v,digits){
+  if(!isFinite(v)) return '—';
+  if(Math.abs(v)>=1e6) return v.toExponential(2).replace('+','');
+  const d=digits===undefined?3:digits;
+  let s=v.toFixed(d);
+  if(s.indexOf('.')>=0) s=s.replace(/0+$/,'').replace(/\.$/,'');
+  if(s==='-0') s='0';
+  return s;
+}
+/* 坐标显示的小数位数（可在设置中改） */
+function dg(){
+  const d=typeof S.dec==='number'?S.dec:2;
+  return clamp(Math.round(d),0,4);
+}
+/* 固定位数的坐标文字：保留 0 位时不带小数点 */
+function dnum(v){
+  const d=dg();
+  if(!isFinite(v)) return '—';
+  let s=v.toFixed(d);
+  if(s==='-0'||s==='-0.0') s=(0).toFixed(d);
+  return s;
+}
+/* 长度、面积等量：固定两位 */
+function len2(v){
+  if(!isFinite(v)) return '—';
+  let s=v.toFixed(2);
+  if(s==='-0.00') s='0.00';
+  return s;
+}
+function lerpColor(c1,c2,t){
+  return 'rgb('+Math.round(c1[0]+(c2[0]-c1[0])*t)+','+
+         Math.round(c1[1]+(c2[1]-c1[1])*t)+','+
+         Math.round(c1[2]+(c2[2]-c1[2])*t)+')';
+}
+function heightColor(t){
+  const A=[46,92,140],B=[110,162,186],C=[224,152,88];
+  t=clamp(t,0,1);
+  return t<0.5?lerpColor(A,B,t*2):lerpColor(B,C,(t-0.5)*2);
+}
+
+/* ================= 画布尺寸 ================= */
+function fitUnit(){
+  return Math.max(W/22,H/13.5);
+}
+function syncSize(){
+  const r=cv.getBoundingClientRect();
+  const w=Math.max(1,Math.round(r.width));
+  const h=Math.max(1,Math.round(r.height));
+  const dpr=Math.min(3,window.devicePixelRatio||1);
+  if(w===W&&h===H&&Math.round(w*dpr)===cv.width&&Math.round(h*dpr)===cv.height) return false;
+  W=w;H=h;DPR=dpr;
+  cv.width=Math.round(w*DPR);
+  cv.height=Math.round(h*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  return true;
+}
+function resize(){ syncSize(); }
+function resetView(){
+  S.view.cx=0;S.view.cy=0;S.view.unit=fitUnit();
+  userView=false;
+  requestDraw();
+}
+function zoomAt(px,py,factor){
+  const wx=worldX(px),wy=worldY(py);
+  S.view.unit=clamp(S.view.unit*factor,1.2,80000);
+  S.view.cx=wx-(px-W/2)/S.view.unit;
+  S.view.cy=wy+(py-H/2)/S.view.unit;
+  userView=true;
+  requestDraw();
+}
+
+/* ================= 绘制 ================= */
+let drawing=false;
+function requestDraw(){
+  if(drawing) return;
+  drawing=true;
+  try{ draw(); }catch(err){ if(window.console) console.error(err); }
+  drawing=false;
+}
+
+function draw(){
+  if(syncSize()&&!userView){
+    S.view.cx=0;S.view.cy=0;
+    S.view.unit=fitUnit();
+  }
+  if(!W||!H) return;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#fff';
+  ctx.fillRect(0,0,W,H);
+  if(S.tab==='three'){ drawThree(); return; }
+  drawGrid();
+  if(S.tab==='geo'){ drawGeo(); return; }
+  let painted=false;
+  S.exprs.forEach(function(ex){
+    if(ex.fn&&String(ex.text||'').trim()){ drawCurve(ex); painted=true; }
+  });
+  if(!painted) drawHintText('在下方输入表达式，图像会显示在这里','例如 sin(x)、x^2、abs(x)、sqrt(x)');
+  drawTrace();
+}
+
+function drawHintText(main,sub){
+  ctx.save();
+  ctx.textAlign='center';
+  const cy=Math.max(48,H*0.17);
+  const f1='13.5px -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+  const f2='12px -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.font=f1;
+  const w1=ctx.measureText(main).width;
+  ctx.font=f2;
+  const w2=sub?ctx.measureText(sub).width:0;
+  const bw=Math.min(W-24,Math.max(w1,w2)+30);
+  const bh=sub?58:34;
+  ctx.fillStyle='#fff';
+  ctx.strokeStyle='#ebedf1';
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(W/2-bw/2,cy-21,bw,bh,11);
+  else ctx.rect(W/2-bw/2,cy-21,bw,bh);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle='#959ca5';
+  ctx.font=f1;
+  ctx.fillText(main,W/2,cy);
+  if(sub){
+    ctx.fillStyle='#b0b6be';
+    ctx.font=f2;
+    ctx.fillText(sub,W/2,cy+21);
+  }
+  ctx.restore();
+}
+
+function drawGrid(){
+  const u=S.view.unit;
+  const x0=worldX(0),x1=worldX(W),y0=worldY(H),y1=worldY(0);
+  const minor=niceStep(26/u),major=pickLabelStep(u,H/2/u);
+  ctx.lineWidth=1;
+  if(S.showGrid){
+    ctx.strokeStyle='#e9ebef';
+    ctx.beginPath();
+    for(let i=Math.ceil(x0/minor);i*minor<=x1;i++){
+      const x=Math.round(toX(i*minor))+0.5;
+      ctx.moveTo(x,0);ctx.lineTo(x,H);
+    }
+    for(let j=Math.ceil(y0/minor);j*minor<=y1;j++){
+      const y=Math.round(toY(j*minor))+0.5;
+      ctx.moveTo(0,y);ctx.lineTo(W,y);
+    }
+    ctx.stroke();
+    ctx.strokeStyle='#dfe2e8';
+    ctx.beginPath();
+    for(let i=Math.ceil(x0/major);i*major<=x1;i++){
+      const x=Math.round(toX(i*major))+0.5;
+      ctx.moveTo(x,0);ctx.lineTo(x,H);
+    }
+    for(let j=Math.ceil(y0/major);j*major<=y1;j++){
+      const y=Math.round(toY(j*major))+0.5;
+      ctx.moveTo(0,y);ctx.lineTo(W,y);
+    }
+    ctx.stroke();
+  }
+  const ax=toX(0),ay=toY(0);
+  ctx.strokeStyle='#17191d';
+  ctx.lineWidth=1.9;
+  ctx.beginPath();
+  if(ay>=-1&&ay<=H+1){ ctx.moveTo(0,Math.round(ay)+0.5);ctx.lineTo(W,Math.round(ay)+0.5); }
+  if(ax>=-1&&ax<=W+1){ ctx.moveTo(Math.round(ax)+0.5,0);ctx.lineTo(Math.round(ax)+0.5,H); }
+  ctx.stroke();
+  if(S.showLabels) drawTicks(major,ax,ay,x0,x1,y0,y1);
+}
+
+function drawTicks(step,ax,ay,x0,x1,y0,y1){
+  const d=decimalsOf(step);
+  ctx.save();
+  ctx.font='500 12px -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillStyle='#5f656e';
+  const labelY=clamp(ay,6,H-30);
+  const labelX=clamp(ax,34,W-8);
+  ctx.textAlign='center';
+  ctx.textBaseline='top';
+  for(let i=Math.ceil(x0/step);i*step<=x1;i++){
+    const v=i*step,px=toX(v);
+    if(px<12||px>W-12) continue;
+    if(Math.abs(v)<step*1e-6) continue;
+    ctx.fillText(fmt(v,step),px,labelY+5);
+  }
+  if(ax>18&&ax<W-14&&ay>-6&&ay<H-16){
+    ctx.textAlign='right';
+    ctx.fillText('0',ax-6,ay+5);
+  }
+  ctx.textAlign='right';
+  ctx.textBaseline='middle';
+  for(let j=Math.ceil(y0/step);j*step<=y1;j++){
+    const v=j*step,py=toY(v);
+    if(py<10||py>H-10) continue;
+    if(Math.abs(v)<step*1e-6) continue;
+    ctx.fillText(fmt(v,step),labelX-6,py);
+  }
+  ctx.restore();
+}
+
+function drawCurve(ex){
+  const f=ex.fn;
+  const vars={x:0,y:0};
+  const limit=Math.max(H*6,4000);
+  const d=ex.dom||{};
+  const xLo=(typeof d.xLo==='number')?d.xLo:null;
+  const xHi=(typeof d.xHi==='number')?d.xHi:null;
+  let px0=0,px1=W;
+  if(xLo!==null) px0=Math.max(0,toX(xLo));
+  if(xHi!==null) px1=Math.min(W,toX(xHi));
+  if(px1<=px0-0.5) return;
+  let started=false,prev=null;
+  ctx.strokeStyle=ex.color;
+  ctx.lineWidth=2;
+  ctx.lineJoin='round';
+  ctx.lineCap='round';
+  ctx.beginPath();
+  const list=[];
+  for(let px=px0;px<=px1;px+=1) list.push(px);
+  if(list.length===0||px1-list[list.length-1]>0.4) list.push(px1);
+  list.forEach(function(px){
+    vars.x=worldX(px);
+    let y;
+    try{ y=f(vars); }catch(e){ y=NaN; }
+    const py=(typeof y==='number'&&isFinite(y))?toY(y):NaN;
+    if(!isFinite(py)||Math.abs(py)>limit){ started=false;prev=null;return; }
+    if(!started){ ctx.moveTo(px,py);started=true; }
+    else if(prev!==null&&Math.abs(py-prev)>H*2.4){ ctx.moveTo(px,py); }
+    else{ ctx.lineTo(px,py); }
+    prev=py;
+  });
+  ctx.stroke();
+  // 区间端点：实心=包含，空心=不包含
+  const ends=[];
+  if(xLo!==null) ends.push([xLo,!!d.xLoOpen]);
+  if(xHi!==null) ends.push([xHi,!!d.xHiOpen]);
+  ends.forEach(function(e){
+    const v=e[0],open=e[1];
+    const px=toX(v);
+    if(px<-3||px>W+3) return;
+    vars.x=v;
+    let y;
+    try{ y=f(vars); }catch(err){ return; }
+    if(typeof y!=='number'||!isFinite(y)) return;
+    const py=toY(y);
+    if(py<-24||py>H+24) return;
+    ctx.beginPath();
+    ctx.arc(px,py,4,0,Math.PI*2);
+    if(open){ ctx.strokeStyle=ex.color;ctx.lineWidth=2;ctx.stroke(); }
+    else{ ctx.fillStyle=ex.color;ctx.fill(); }
+  });
+}
+
+function drawTrace(){
+  if(!S.trace||!S.hover||S.tab!=='func') return;
+  const px=clamp(S.hover.px,0,W);
+  ctx.save();
+  ctx.setLineDash([4,4]);
+  ctx.lineWidth=1;
+  ctx.strokeStyle='#c9ced7';
+  ctx.beginPath();
+  ctx.moveTo(px,0);ctx.lineTo(px,H);
+  ctx.stroke();
+  ctx.restore();
+  const vars={x:worldX(px),y:0};
+  S.exprs.forEach(function(ex){
+    if(!ex.fn||!String(ex.text||'').trim()) return;
+    const d=ex.dom||{};
+    if(typeof d.xLo==='number'&&vars.x<d.xLo-1e-9) return;
+    if(typeof d.xHi==='number'&&vars.x>d.xHi+1e-9) return;
+    let y;
+    try{ y=ex.fn(vars); }catch(e){ return; }
+    if(!isFinite(y)) return;
+    const py=toY(y);
+    if(py<-30||py>H+30) return;
+    ctx.beginPath();
+    ctx.arc(px,py,3.6,0,Math.PI*2);
+    ctx.fillStyle=ex.color;
+    ctx.fill();
+    ctx.strokeStyle='#fff';
+    ctx.lineWidth=1.4;
+    ctx.stroke();
+  });
+}
+
+/* ================= 3D 曲面 ================= */
+function rgbaOf(hex,a){
+  const h=String(hex).replace('#','');
+  const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
+  return 'rgba('+r+','+g+','+b+','+a+')';
+}
+function drawThree(){
+  const RX=S.three.rx||5,RZ=S.three.rz||5,RY=S.three.ry||5;
+  const az=S.three.az,pitch=S.three.pitch,scale=S.three.scale;
+  const ca=Math.cos(az),sa=Math.sin(az),cp=Math.cos(pitch),sp=Math.sin(pitch);
+  const halfW=Math.max(0.5,RX*Math.abs(ca)+RY*Math.abs(sa));
+  const ix=RX*Math.abs(sa)+RY*Math.abs(ca);
+  const halfH=Math.max(0.5,ix*sp+RZ*cp);
+  const base=Math.min(W*1.52/halfW,H*0.46/halfH)*scale;
+  const cx0=W/2,cy0=H*0.50;
+  function proj(x,y,zz){
+    const xr=x*ca-y*sa, yr=x*sa+y*ca;
+    return {x:cx0+xr*base, y:cy0+(yr*sp-zz*cp)*base, d:yr*cp-zz*sp};
+  }
+
+  // 立方体线框
+  const V=[];
+  for(let i=0;i<8;i++) V.push([(i&1?RX:-RX),(i&2?RY:-RY),(i&4?RZ:-RZ)]);
+  const E=[];
+  for(let i=0;i<8;i++) for(let b=0;b<3;b++){ const j=i^(1<<b); if(j>i) E.push([i,j]); }
+  E.forEach(function(e){
+    const p1=proj(V[e[0]][0],V[e[0]][1],V[e[0]][2]);
+    const p2=proj(V[e[1]][0],V[e[1]][1],V[e[1]][2]);
+    const back=(p1.d+p2.d)/2>0;
+    ctx.strokeStyle=back?'rgba(122,132,148,.20)':'rgba(96,106,122,.42)';
+    ctx.lineWidth=back?0.9:1.25;
+    ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke();
+  });
+
+  // 曲面
+  const ex=S.exprs.filter(function(e){ return e.fn&&String(e.text||'').trim(); })[0];
+  if(ex){
+    const d=ex.dom||{};
+    let xa=-RX,xb=RX,ya=-RY,yb=RY;
+    if(typeof d.xLo==='number') xa=Math.max(-RX,d.xLo);
+    if(typeof d.xHi==='number') xb=Math.min(RX,d.xHi);
+    if(typeof d.yLo==='number') ya=Math.max(-RY,d.yLo);
+    if(typeof d.yHi==='number') yb=Math.min(RY,d.yHi);
+    if(xb<=xa||yb<=ya){
+      drawHintText('定义域不在方框范围内','把 x 的范围调在 -'+fmtNum(RX,1)+' 到 '+fmtNum(RX,1)+' 之间');
+      return;
+    }
+    const N=32,sx=(xb-xa)/N,sy=(yb-ya)/N,size=N+1;
+    const zs=new Float64Array(size*size);
+    const vars={x:0,y:0};
+    let ok=0;
+    for(let i=0;i<size;i++) for(let j=0;j<size;j++){
+      vars.x=xa+i*sx;vars.y=ya+j*sy;
+      let v;
+      try{ v=ex.fn(vars); }catch(err){ v=NaN; }
+      if(typeof v==='number'&&isFinite(v)){ zs[i*size+j]=v; ok++; }
+      else zs[i*size+j]=NaN;
+    }
+    if(ok>10){
+      const lim=RZ*1.02;
+      const cells=[];
+      for(let i=0;i<N;i++) for(let j=0;j<N;j++){
+        const z00=zs[i*size+j],z10=zs[(i+1)*size+j],z01=zs[i*size+j+1],z11=zs[(i+1)*size+j+1];
+        if(!(Math.abs(z00)<=lim&&Math.abs(z10)<=lim&&Math.abs(z01)<=lim&&Math.abs(z11)<=lim)) continue;
+        const x0=xa+i*sx,x1=x0+sx,y0=ya+j*sy,y1=y0+sy;
+        const p00=proj(x0,y0,z00),p10=proj(x1,y0,z10),p11=proj(x1,y1,z11),p01=proj(x0,y1,z01);
+        const fx=(z10-z00)/sx,fy=(z01-z00)/sy;
+        let nx=-fx,ny=-fy,nz=1;
+        const nl=Math.sqrt(nx*nx+ny*ny+nz*nz);
+        nx/=nl;ny/=nl;nz/=nl;
+        let li=Math.abs(nx*(-0.34)+ny*(-0.52)+nz*0.78);
+        li=clamp(li,0,1);
+        cells.push({d:(p00.d+p10.d+p11.d+p01.d)/4,ps:[p00,p10,p11,p01],li:li});
+      }
+      cells.sort(function(a,b){ return b.d-a.d; });
+      cells.forEach(function(c){
+        const k=c.li;
+        ctx.beginPath();
+        ctx.moveTo(c.ps[0].x,c.ps[0].y);
+        ctx.lineTo(c.ps[1].x,c.ps[1].y);
+        ctx.lineTo(c.ps[2].x,c.ps[2].y);
+        ctx.lineTo(c.ps[3].x,c.ps[3].y);
+        ctx.closePath();
+        ctx.fillStyle='rgba('+Math.round(146+86*k)+','+Math.round(20+34*k)+','+Math.round(22+30*k)+',.94)';
+        ctx.fill();
+        ctx.strokeStyle='rgba(118,16,18,.42)';
+        ctx.lineWidth=0.7;
+        ctx.stroke();
+      });
+      // 定义域边界：曲面边缘虚线
+      if(typeof d.xLo==='number'||typeof d.xHi==='number'||typeof d.yLo==='number'||typeof d.yHi==='number'){
+        ctx.save();
+        ctx.setLineDash([5,4]);
+        ctx.strokeStyle='rgba(60,70,85,.42)';
+        ctx.lineWidth=1;
+        const bx=xa,by=ya,bw=xb-xa,bh=yb-ya;
+        [[bx,by],[xb,by],[xb,yb],[bx,yb]].forEach(function(p,i,arr){
+          const q=arr[(i+1)%4];
+          const z1=(function(){try{const v=ex.fn({x:p[0],y:p[1]});return isFinite(v)?v:0;}catch(e){return 0;}})();
+          const z2=(function(){try{const v=ex.fn({x:q[0],y:q[1]});return isFinite(v)?v:0;}catch(e){return 0;}})();
+          const a1=proj(p[0],p[1],z1),a2=proj(q[0],q[1],z2);
+          ctx.beginPath();ctx.moveTo(a1.x,a1.y);ctx.lineTo(a2.x,a2.y);ctx.stroke();
+        });
+        ctx.restore();
+      }
+    }else{
+      drawHintText('该表达式在所选范围内没有有效取值','换个表达式或调整范围试试');
+    }
+  }else{
+    drawHintText('输入形如 sin(x)*cos(y) 的曲面表达式','拖动可旋转，滚轮缩放');
+  }
+
+  // 坐标轴
+  const O=proj(0,0,0);
+  ctx.lineCap='butt';
+  function seg(a,b,color,w){
+    ctx.strokeStyle=color;ctx.lineWidth=w;
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+  }
+  function arrow(a,b,color){
+    const dx=b.x-a.x,dy=b.y-a.y,L=Math.sqrt(dx*dx+dy*dy)||1;
+    const ux=dx/L,uy=dy/L,px=-uy,py=ux;
+    const s=6.2;
+    ctx.beginPath();
+    ctx.moveTo(b.x,b.y);
+    ctx.lineTo(b.x-ux*s+px*s*0.42,b.y-uy*s+py*s*0.42);
+    ctx.lineTo(b.x-ux*s-px*s*0.42,b.y-uy*s-py*s*0.42);
+    ctx.closePath();
+    ctx.fillStyle=color;ctx.fill();
+  }
+  const AX='#5d6570';
+  [[1,0,0,'x',RX],[0,1,0,'y',RY],[0,0,1,'z',RZ]].forEach(function(v){
+    const end=proj(v[0]*v[4]*1.06,v[1]*v[4]*1.06,v[2]*v[4]*1.06);
+    seg(O,end,AX,1.3);
+    arrow(O,end,AX);
+    ctx.font='600 12px -apple-system,"Segoe UI","PingFang SC",sans-serif';
+    ctx.fillStyle=AX;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(v[3],end.x+(v[3]==='z'?10:end.x>cx0?13:-13),end.y+(v[3]==='z'?-10:0));
+  });
+  seg(O,proj(0,0,-RZ*1.02),'rgba(93,101,112,.55)',1.1);
+  // z 轴刻度
+  ctx.font='500 10.5px -apple-system,"Segoe UI","PingFang SC",sans-serif';
+  ctx.fillStyle='#6f7681';
+  [[RZ,fmtNum(RZ,1)],[-RZ,'-'+fmtNum(RZ,1)]].forEach(function(t){
+    const p=proj(0,0,t[0]);
+    ctx.strokeStyle='rgba(93,101,112,.6)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(p.x-3.5,p.y);ctx.lineTo(p.x+3.5,p.y);ctx.stroke();
+    ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillText(t[1],p.x+6,p.y);
+  });
+  ctx.textAlign='left';ctx.textBaseline='alphabetic';
+  updateRangeFab();
+}
+
+/* ================= 几何引擎 ================= */
+function geoNextName(){
+  const used={};
+  S.geo.objs.forEach(function(o){ if(o.type==='point') used[o.name]=1; });
+  for(let i=0;i<26;i++){ const n=String.fromCharCode(65+i); if(!used[n]) return n; }
+  let k=1; while(used['P'+k]) k++;
+  return 'P'+k;
+}
+function geoExById(id){
+  for(let i=0;i<S.exprs.length;i++){ if(S.exprs[i].id===id) return S.exprs[i]; }
+  return null;
+}
+function geoSolve(){
+  const pts={};
+  S.geo.objs.forEach(function(o){
+    if(o.type==='point'&&!o.dep&&!o.on) pts[o.name]={x:o.x,y:o.y};
+  });
+  for(let pass=0;pass<5;pass++){
+    S.geo.objs.forEach(function(o){
+      if(o.type!=='point'||pts[o.name]) return;
+      if(o.dep&&o.dep.k==='mid'){
+        const a=pts[o.dep.a],b=pts[o.dep.b];
+        if(a&&b) pts[o.name]={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+        return;
+      }
+      if(o.on){
+        if(o.on.k==='seg'){
+          const a=pts[o.on.a],b=pts[o.on.b];
+          if(a&&b){
+            const t=clamp(o.t==null?0.5:o.t,0,1);
+            pts[o.name]={x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t};
+          }
+        }else if(o.on.k==='circ'){
+          const c0=pts[o.on.c],r0=pts[o.on.p];
+          if(c0&&r0){
+            const r=Math.sqrt((r0.x-c0.x)*(r0.x-c0.x)+(r0.y-c0.y)*(r0.y-c0.y));
+            const ang=(typeof o.on.ang==='number')?o.on.ang:0;
+            pts[o.name]={x:c0.x+r*Math.cos(ang),y:c0.y+r*Math.sin(ang)};
+          }
+        }else if(o.on.k==='curve'){
+          const ex=geoExById(o.on.id);
+          if(ex&&ex.fn){
+            const xv=(typeof o.on.x==='number')?o.on.x:0;
+            let y;
+            try{ y=ex.fn({x:xv,y:0}); }catch(err){ y=NaN; }
+            if(typeof y==='number'&&isFinite(y)) pts[o.name]={x:xv,y:y};
+          }
+        }
+      }
+    });
+  }
+  // 垂线 / 平行线：用第二个端点动态算出方向点（不额外生成可见的点）
+  S.geo.objs.forEach(function(o){
+    if(o.type!=='line'||!o.dep) return;
+    const p=pts[o.dep.pt],A=pts[o.dep.a],B=pts[o.dep.b];
+    if(!p||!A||!B) return;
+    let dx=B.x-A.x,dy=B.y-A.y;
+    const L=Math.sqrt(dx*dx+dy*dy)||1;
+    dx/=L;dy/=L;
+    if(o.dep.k==='perp'){ const t=dx; dx=-dy; dy=t; }
+    const len=(typeof o.dep.len==='number'&&o.dep.len>1e-9)?o.dep.len:Math.max(L,2);
+    pts[o.b]={x:p.x+dx*len,y:p.y+dy*len};
+  });
+  return pts;
+}
+function hasGeoCurves(){
+  return S.exprs.some(function(e){ return e.fn&&String(e.text||'').trim(); });
+}
+function geoHitPoint(p){
+  const pts=geoSolve();
+  let best=null,bd=24;
+  S.geo.objs.forEach(function(o){
+    if(o.type!=='point') return;
+    const q=pts[o.name];
+    if(!q) return;
+    const px=toX(q.x),py=toY(q.y);
+    const d=Math.sqrt((px-p.x)*(px-p.x)+(py-p.y)*(py-p.y));
+    if(d<bd){ bd=d;best=o.name; }
+  });
+  return best;
+}
+function geoDist2Seg(p,a,b){
+  const ax=toX(a.x),ay=toY(a.y),bx=toX(b.x),by=toY(b.y);
+  const dx=bx-ax,dy=by-ay;
+  const L=dx*dx+dy*dy||1;
+  let t=((p.x-ax)*dx+(p.y-ay)*dy)/L;
+  t=clamp(t,0,1);
+  const qx=ax+t*dx,qy=ay+t*dy;
+  return Math.sqrt((p.x-qx)*(p.x-qx)+(p.y-qy)*(p.y-qy));
+}
+
+function normGeoText(text){
+  return String(text==null?'':text)
+    .replace(/[−–—]/g,'-')
+    .replace(/[，、]/g,',')
+    .replace(/（/g,'(').replace(/）/g,')')
+    .replace(/＝/g,'=')
+    .replace(/：/g,':')
+    .replace(/　/g,' ')
+    .replace(/[\u200b-\u200f\u00a0]/g,'')
+    .trim();
+}
+function parseGeoDef(text){
+  const t=normGeoText(text);
+  if(!t) return null;
+  const num='([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))';
+  let m;
+  m=t.match(new RegExp('^([A-Za-z]\\w*)\\s*=\\s*\\(?\\s*'+num+'\\s*,\\s*'+num+'\\s*\\)?$'));
+  if(m) return {type:'point',name:m[1].toUpperCase(),x:parseFloat(m[2]),y:parseFloat(m[3]),refs:[]};
+  m=t.match(new RegExp('^\\(?\\s*'+num+'\\s*,\\s*'+num+'\\s*\\)?$'));
+  if(m) return {type:'point',x:parseFloat(m[1]),y:parseFloat(m[2]),refs:[]};
+  m=t.match(/^([A-Za-z]\w*)\s*=\s*on\s*\(\s*(.+?)\s*\)?$/i);
+  if(m){
+    const arg=m[2].trim();
+    const sm=arg.match(/^(segment|line)\s*\(\s*([^()]+?)\s*\)$/i);
+    if(sm){
+      const args=sm[2].split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+      if(args.length===2) return {type:'point',name:m[1].toUpperCase(),on:{k:'seg',a:args[0],b:args[1]},refs:args,t:0.5};
+    }
+    const cm=arg.match(/^circle\s*\(\s*([^()]+?)\s*\)$/i);
+    if(cm){
+      const cargs=cm[1].split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+      if(cargs.length===2) return {type:'point',name:m[1].toUpperCase(),on:{k:'circ',c:cargs[0],p:cargs[1]},refs:cargs,ang:0};
+    }
+    return {type:'point',name:m[1].toUpperCase(),on:{k:'curve',ref:arg},refs:[]};
+  }
+  // 线段/直线的中文简写：线段 AB、直线 AB、AB
+  m=t.match(/^线段\s*([A-Za-z])\s*([A-Za-z])$/);
+  if(m) return {type:'segment',a:m[1].toUpperCase(),b:m[2].toUpperCase(),refs:[m[1].toUpperCase(),m[2].toUpperCase()]};
+  m=t.match(/^直线\s*([A-Za-z])\s*([A-Za-z])$/);
+  if(m) return {type:'line',a:m[1].toUpperCase(),b:m[2].toUpperCase(),refs:[m[1].toUpperCase(),m[2].toUpperCase()]};
+  // 圆的中文简写：圆 BC、圆(B,C)
+  m=t.match(/^圆\s*\(?\s*([A-Za-z])\s*,\s*([A-Za-z])\s*\)?$/);
+  if(m) return {type:'circle',c:m[1].toUpperCase(),p:m[2].toUpperCase(),refs:[m[1].toUpperCase(),m[2].toUpperCase()]};
+  m=t.match(/^圆\s*([A-Za-z])\s*([A-Za-z])$/);
+  if(m) return {type:'circle',c:m[1].toUpperCase(),p:m[2].toUpperCase(),refs:[m[1].toUpperCase(),m[2].toUpperCase()]};
+  m=t.match(/^([A-Z])\s?([A-Z])$/);
+  if(m&&m[1]!==m[2]) return {type:'segment',a:m[1],b:m[2],refs:[m[1],m[2]]};
+  // 多边形中文简写：多边形 ABCD、多边形(A,B,C,D)、ABCD
+  m=t.match(/^多边形\s*\(?(.*?)\)?$/);
+  if(m){
+    const ls=(m[1].match(/[A-Za-z]/g)||[]).map(function(s){ return s.toUpperCase(); });
+    if(ls.length>=3) return {type:'polygon',pts:ls,refs:ls};
+  }
+  // 角：角 ABC、角(A,B,C)
+  m=t.match(/^角\s*\(?(.*?)\)?$/);
+  if(m){
+    const ls=(m[1].match(/[A-Za-z]/g)||[]).map(function(s){ return s.toUpperCase(); });
+    if(ls.length===3) return {type:'angle',a:ls[0],v:ls[1],b:ls[2],refs:ls};
+  }
+  m=t.match(/^([A-Z]{3,})$/);
+  if(m) return {type:'polygon',pts:m[1].split(''),refs:m[1].split('')};
+  m=t.match(/^(segment|line|circle|polygon|angle|midpoint)\s*\(\s*([^()]+?)\s*\)$/i);
+  if(!m) return null;
+  const cmd=m[1].toLowerCase();
+  const args=m[2].split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+  if(cmd==='midpoint'){
+    if(args.length!==2) return null;
+    return {type:'point',dep:{k:'mid',a:args[0],b:args[1]},refs:args};
+  }
+  if(cmd==='polygon'){
+    if(args.length<3) return null;
+    return {type:'polygon',pts:args,refs:args};
+  }
+  const need={segment:2,line:2,circle:2,angle:3}[cmd];
+  if(!need||args.length!==need) return null;
+  if(cmd==='segment') return {type:'segment',a:args[0],b:args[1],refs:args};
+  if(cmd==='line') return {type:'line',a:args[0],b:args[1],refs:args};
+  if(cmd==='circle') return {type:'circle',c:args[0],p:args[1],refs:args};
+  if(cmd==='angle') return {type:'angle',a:args[0],v:args[1],b:args[2],refs:args};
+  return null;
+}
+
+function syncGeoRows(){
+  refreshErrBar();
+  renderGeoRows();
+  requestDraw();
+  commit();
+}
+
+function geoHitObject(p,pts){
+  pts=pts||geoSolve();
+  let best=null,bd=18;
+  S.geo.objs.forEach(function(o){
+    if(o.type!=='segment'&&o.type!=='line') return;
+    const a=pts[o.a],b=pts[o.b];
+    if(!a||!b) return;
+    let d;
+    if(o.type==='segment'){
+      d=geoDist2Seg(p,a,b);
+    }else{
+      const ax=toX(a.x),ay=toY(a.y),bx=toX(b.x),by=toY(b.y);
+      const dx=bx-ax,dy=by-ay,L=Math.sqrt(dx*dx+dy*dy)||1;
+      d=Math.abs((p.x-ax)*dy-(p.y-ay)*dx)/L;
+    }
+    if(d<bd){ bd=d;best={kind:'seg',o:o}; }
+  });
+  // 圆：命中圆周（到圆心距离与半径之差）
+  S.geo.objs.forEach(function(o){
+    if(o.type!=='circle') return;
+    const c=pts[o.c],r0=pts[o.p];
+    if(!c||!r0) return;
+    const cx=toX(c.x),cy=toY(c.y),rx=toX(r0.x),ry=toY(r0.y);
+    const r=Math.sqrt((rx-cx)*(rx-cx)+(ry-cy)*(ry-cy));
+    if(r<1) return;
+    const dd=Math.abs(Math.sqrt((p.x-cx)*(p.x-cx)+(p.y-cy)*(p.y-cy))-r);
+    if(dd<bd){ bd=dd;best={kind:'circ',o:o}; }
+  });
+  S.exprs.forEach(function(ex){
+    if(!ex.fn||!String(ex.text||'').trim()) return;
+    const wx=worldX(p.x),d0=ex.dom||{};
+    if(typeof d0.xLo==='number'&&wx<d0.xLo-1e-9) return;
+    if(typeof d0.xHi==='number'&&wx>d0.xHi+1e-9) return;
+    let y;
+    try{ y=ex.fn({x:wx,y:0}); }catch(err){ return; }
+    if(typeof y!=='number'||!isFinite(y)) return;
+    const py=toY(y);
+    if(py<-40||py>H+40) return;
+    const d=Math.abs(py-p.y);
+    if(d<bd){ bd=d;best={kind:'curve',ex:ex}; }
+  });
+  return best;
+}
+function geoPointColor(){
+  const n=S.geo.objs.filter(function(o){ return o.type==='point'; }).length;
+  return GDOT[n%GDOT.length];
+}
+function geoAddPointOn(hit,p){
+  const pts=geoSolve();
+  if(hit.kind==='curve'){
+    const ex=hit.ex;
+    let xv=worldX(p.x);
+    const d=ex.dom||{};
+    if(typeof d.xLo==='number') xv=Math.max(xv,d.xLo);
+    if(typeof d.xHi==='number') xv=Math.min(xv,d.xHi);
+    geoAddObj({oid:++idSeq,type:'point',name:geoNextName(),dep:null,
+      on:{k:'curve',id:ex.id,ref:ex.body||ex.text,x:xv},
+      label:true,color:geoPointColor(),err:null});
+    return;
+  }
+  if(hit.kind==='circ'){
+    const o=hit.o,c=pts[o.c],r0=pts[o.p];
+    if(!c||!r0) return;
+    const ang=Math.atan2(worldY(p.y)-c.y,worldX(p.x)-c.x);
+    geoAddObj({oid:++idSeq,type:'point',name:geoNextName(),dep:null,
+      on:{k:'circ',c:o.c,p:o.p,ang:ang},
+      label:true,color:geoPointColor(),err:null});
+    return;
+  }
+  const seg=hit.o,a=pts[seg.a],b=pts[seg.b];
+  if(!a||!b) return;
+  const ax=toX(a.x),ay=toY(a.y),bx=toX(b.x),by=toY(b.y);
+  const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy||1;
+  let t=((p.x-ax)*dx+(p.y-ay)*dy)/L2;
+  t=(seg.type==='line')?t:clamp(t,0,1);
+  geoAddObj({oid:++idSeq,type:'point',name:geoNextName(),dep:null,
+    on:{k:'seg',a:seg.a,b:seg.b,line:(seg.type==='line')},t:t,
+    label:true,color:geoPointColor(),err:null});
+}
+function geoDragOnObj(o,px,py,pts){
+  if(!o.on) return;
+  if(o.on.k==='seg'){
+    const a=pts[o.on.a],b=pts[o.on.b];
+    if(!a||!b) return;
+    const ax=toX(a.x),ay=toY(a.y),bx=toX(b.x),by=toY(b.y);
+    const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy||1;
+    const t=((px-ax)*dx+(py-ay)*dy)/L2;
+    o.t=(o.on.line)?t:clamp(t,0,1);
+  }else if(o.on.k==='circ'){
+    const c=pts[o.on.c],r0=pts[o.on.p];
+    if(!c||!r0) return;
+    o.on.ang=Math.atan2(worldY(py)-c.y,worldX(px)-c.x);
+  }else if(o.on.k==='curve'){
+    const ex=geoExById(o.on.id);
+    if(!ex||!ex.fn) return;
+    let xv=worldX(px);
+    const d=ex.dom||{};
+    if(typeof d.xLo==='number') xv=Math.max(xv,d.xLo);
+    if(typeof d.xHi==='number') xv=Math.min(xv,d.xHi);
+    o.on.x=xv;
+  }
+}
+function geoIsLine(a,b){
+  let r=false;
+  S.geo.objs.forEach(function(o){
+    if(o.type==='line'&&o.a===a&&o.b===b) r=true;
+  });
+  return r;
+}
+function geoTap(p){
+  const g=S.geo;
+  if(g.tool==='select'){
+    g.pend=[];
+    requestDraw();
+    return;
+  }
+  if(g.tool==='onobj'){
+    const hit=geoHitObject(p);
+    if(!hit){ toast('点一下函数曲线或线段'); return; }
+    geoAddPointOn(hit,p);
+    g.pend=[];
+    syncGeoRows();
+    return;
+  }
+  if(g.tool==='perp'||g.tool==='parallel'){
+    const kind=(g.tool==='perp')?'垂线':'平行线';
+    if(!g.pbase){
+      const hit=geoHitObject(p);
+      if(!hit||hit.kind!=='seg'){ toast('先点一条已有的线段或直线作为基准'); return; }
+      g.pbase={a:hit.o.a,b:hit.o.b,type:hit.o.type};
+      const lname=(hit.o.type==='line')?'直线':'线段';
+      const cap=$('#caption');
+      if(cap&&S.tab==='geo') cap.textContent=kind+'：基准 '+lname+hit.o.a+hit.o.b+'，再点一个点';
+      toast('基准选中：'+lname+' '+hit.o.a+hit.o.b+'，再点一个点');
+      requestDraw();
+      return;
+    }
+    let pn=geoHitPoint(p);
+    if(!pn) pn=geoAddPoint(worldX(p.x),worldY(p.y));
+    const pts0=geoSolve();
+    const A0=pts0[g.pbase.a],B0=pts0[g.pbase.b];
+    const bl=(A0&&B0)?Math.sqrt((B0.x-A0.x)*(B0.x-A0.x)+(B0.y-A0.y)*(B0.y-A0.y)):0;
+    const nid=++idSeq;
+    const baseName=g.pbase.a+g.pbase.b;
+    geoAddObj({oid:nid,type:'line',a:pn,b:'q'+nid,
+      dep:{k:(g.tool==='perp'?'perp':'para'),pt:pn,a:g.pbase.a,b:g.pbase.b,len:(bl>1e-9?bl:3)},
+      color:geoPickColor('line'),label:true,err:null});
+    g.pbase=null;
+    g.pend=[];
+    syncGeoRows();
+    toast('已作'+kind+'：过 '+pn+' '+(g.tool==='perp'?'垂直于':'平行于')+' '+baseName+'，拖动该点可平移这条线');
+    const cap2=$('#caption');
+    if(cap2&&S.tab==='geo') cap2.textContent=(g.tool==='perp'?'垂线：先点一条线段或直线，再点一个点，过该点作垂线':'平行线：先点一条线段或直线，再点一个点，过该点作平行线');
+    return;
+  }
+  let name=geoHitPoint(p);
+  if(!name) name=geoAddPoint(worldX(p.x),worldY(p.y));
+  const tool=g.tool;
+  if(tool==='point'){ g.pend=[]; syncGeoRows(); return; }
+  if(tool==='polygon'){
+    const shape=g.shape||'poly';
+    if(shape==='poly'){
+      if(g.pend.length>=3&&name===g.pend[0]){
+        geoAddObj({oid:++idSeq,type:'polygon',pts:g.pend.slice(),color:geoPickColor('polygon'),label:true,err:null});
+        g.pend=[];
+      }else if(g.pend.indexOf(name)<0){
+        g.pend.push(name);
+      }
+      syncGeoRows();
+      return;
+    }
+    if(g.pend.indexOf(name)<0) g.pend.push(name);
+    const need=((shape==='square'||shape==='rect')?2:3);
+    if(g.pend.length>=need){
+      buildShape(shape,g.pend.slice());
+      g.pend=[];
+      const cap=$('#caption');
+      if(cap&&S.tab==='geo') cap.textContent=shapeHint(shape);
+    }
+    syncGeoRows();
+    return;
+  }
+  g.pend.push(name);
+  const need=(tool==='angle')?3:2;
+  if(g.pend.length>=need){
+    const q=g.pend.slice();
+    if(tool==='segment'){
+      geoAddObj({oid:++idSeq,type:'segment',a:q[0],b:q[1],color:geoPickColor('segment'),label:true,err:null});
+    }else if(tool==='circle'){
+      geoAddObj({oid:++idSeq,type:'circle',c:q[0],p:q[1],color:geoPickColor('circle'),label:true,err:null});
+    }else if(tool==='angle'){
+      geoAddObj({oid:++idSeq,type:'angle',a:q[0],v:q[1],b:q[2],color:geoPickColor('angle'),label:true,err:null});
+    }else if(tool==='midpoint'){
+      geoAddObj({oid:++idSeq,type:'point',name:geoNextName(),dep:{k:'mid',a:q[0],b:q[1]},label:true,color:'#9254de',err:null});
+    }
+    g.pend=[];
+  }
+  syncGeoRows();
+}
+
+function shapeHint(k){
+  return ({
+    square:'正方形：点两个相邻顶点',
+    rect:'长方形：点两个对角顶点',
+    para:'平行四边形：点三个相邻顶点',
+    tri:'三角形：点三个顶点',
+    poly:'多边形：连续点若干点，再点回第一个点闭合'
+  })[k]||'';
+}
+function buildShape(shape,names){
+  const pts=geoSolve();
+  const P=names.map(function(n){ return pts[n]; });
+  if(P.some(function(q){ return !q; })) return;
+  const poly=function(list){
+    geoAddObj({oid:++idSeq,type:'polygon',pts:list,color:geoPickColor('polygon'),label:true,err:null});
+    return list.join('');
+  };
+  if(shape==='tri'){
+    toast('已生成三角形 '+poly(names.slice()));
+    return;
+  }
+  if(shape==='square'){
+    const A=P[0],B=P[1];
+    const dx=B.x-A.x,dy=B.y-A.y;
+    if(Math.sqrt(dx*dx+dy*dy)<1e-9){ toast('两个点重合了，换个点'); return; }
+    const c=geoAddPoint(B.x-dy,B.y+dx);
+    const d=geoAddPoint(A.x-dy,A.y+dx);
+    toast('已生成正方形 '+poly([names[0],names[1],c,d]));
+    return;
+  }
+  if(shape==='rect'){
+    const A=P[0],B=P[1];
+    if(Math.abs(A.x-B.x)<1e-9||Math.abs(A.y-B.y)<1e-9){ toast('这两个点在一条横线或竖线上，画不出长方形'); return; }
+    const c=geoAddPoint(B.x,A.y);
+    const d=geoAddPoint(A.x,B.y);
+    toast('已生成长方形 '+poly([names[0],c,names[1],d]));
+    return;
+  }
+  if(shape==='para'){
+    const A=P[0],B=P[1],C=P[2];
+    const d=geoAddPoint(A.x+C.x-B.x,A.y+C.y-B.y);
+    toast('已生成平行四边形 '+poly([names[0],names[1],names[2],d]));
+    return;
+  }
+}
+
+function geoObjLabel(o,pts){
+  switch(o.type){
+    case 'point':
+      if(o.on){
+        if(o.on.k==='seg') return o.name+' = on(segment('+o.on.a+','+o.on.b+'))';
+        if(o.on.k==='circ') return o.name+' = on(circle('+o.on.c+','+o.on.p+'))';
+        return o.name+' = on('+(o.on.ref||'')+')';
+      }
+      if(o.dep&&o.dep.k==='mid') return 'midpoint('+o.dep.a+','+o.dep.b+')';
+      return o.name+' = ('+dnum(o.x)+', '+dnum(o.y)+')';
+    case 'segment': return '线段 '+o.a+o.b;
+    case 'line':
+      if(o.dep) return (o.dep.k==='perp'?'垂线 ':'平行线 ')+o.dep.pt+(o.dep.k==='perp'?' ⊥ ':' ∥ ')+o.dep.a+o.dep.b;
+      return '直线 '+o.a+o.b;
+    case 'circle': return '圆 '+o.c+o.p;
+    case 'polygon': return '多边形 '+o.pts.join('');
+    case 'angle': return '角 '+o.a+o.v+o.b;
+  }
+  return '';
+}
+function geoShapeName(o){
+  if(o.type==='segment'||o.type==='line') return o.a+o.b;
+  if(o.type==='circle') return o.c+o.p;
+  if(o.type==='polygon') return o.pts.join('');
+  if(o.type==='angle') return o.a+o.v+o.b;
+  return '';
+}
+function geoSameDef(o,def){
+  if(!def||o.type!==def.type) return false;
+  if(def.type==='segment'||def.type==='line'){
+    return (o.a===def.a&&o.b===def.b)||(o.a===def.b&&o.b===def.a);
+  }
+  if(def.type==='circle') return o.c===def.c&&o.p===def.p;
+  if(def.type==='polygon'){
+    const A=o.pts.join(''),B=def.pts.join('');
+    return A===B||A===def.pts.slice().reverse().join('');
+  }
+  if(def.type==='angle') return o.a===def.a&&o.v===def.v&&o.b===def.b;
+  return false;
+}
+function geoObjValue(o,pts){
+  const A=pts[o.a],B=pts[o.b];
+  switch(o.type){
+    case 'point':
+      if(o.on){
+        const p=pts[o.name];
+        return p?'= ('+dnum(p.x)+', '+dnum(p.y)+')':'';
+      }
+      if(o.dep&&o.dep.k==='mid'){
+        const m=pts[o.name];
+        return m?'= ('+dnum(m.x)+', '+dnum(m.y)+')':'';
+      }
+      return '';
+    case 'segment':
+      if(!A||!B) return '';
+      return '= '+len2(Math.sqrt((B.x-A.x)*(B.x-A.x)+(B.y-A.y)*(B.y-A.y)));
+    case 'circle':{
+      const c=pts[o.c],p=pts[o.p];
+      if(!c||!p) return '';
+      return '= '+len2(Math.sqrt((p.x-c.x)*(p.x-c.x)+(p.y-c.y)*(p.y-c.y)));
+    }
+    case 'polygon':
+      return '';
+    case 'angle':{
+      const d=angleDeg(o,pts);
+      if(!isFinite(d)) return '';
+      return '= '+fmtNum(d,1)+'°';
+    }
+  }
+  return '';
+}
+
+/* ---------- 多边形：周长、面积、正多边形判定 ---------- */
+const CN_DIGIT=['零','一','二','三','四','五','六','七','八','九'];
+function cnCount(n){
+  if(n<10) return CN_DIGIT[n];
+  if(n<20) return '十'+(n%10?CN_DIGIT[n%10]:'');
+  return String(n);
+}
+function polyName(n,regular){
+  if(regular){
+    if(n===3) return '正三角形';
+    if(n===4) return '正方形';
+    return '正'+cnCount(n)+'边形';
+  }
+  if(n===3) return '三角形';
+  if(n===4) return '四边形';
+  return cnCount(n)+'边形';
+}
+function polyMetrics(o,pts){
+  const P=o.pts.map(function(n){ return pts[n]; });
+  if(P.length<3||P.some(function(q){ return !q; })) return null;
+  const n=P.length;
+  const sides=[];
+  let per=0;
+  for(let i=0;i<n;i++){
+    const q=P[(i+1)%n];
+    const l=Math.sqrt((q.x-P[i].x)*(q.x-P[i].x)+(q.y-P[i].y)*(q.y-P[i].y));
+    sides.push(l);
+    per+=l;
+  }
+  let ar=0;
+  for(let i=0;i<n;i++){
+    const q=P[(i+1)%n];
+    ar+=P[i].x*q.y-q.x*P[i].y;
+  }
+  const avg=per/n;
+  const tol=Math.max(1e-9,Math.abs(avg)*5e-4);
+  const regular=sides.every(function(l){ return Math.abs(l-avg)<=tol; });
+  return {n:n,per:per,area:Math.abs(ar)/2,regular:regular,sides:sides};
+}
+function polyInfoText(o,pts){
+  const m=polyMetrics(o,pts);
+  if(!m) return '';
+  return polyName(m.n,m.regular)+' · 周长 '+len2(m.per)+' · 面积 '+len2(m.area);
+}
+
+function drawGeo(){
+  const g=S.geo,pts=geoSolve();
+  ctx.save();
+  // 函数曲线：几何模式下也能把函数画在同一张图上
+  S.exprs.forEach(function(ex){
+    if(ex.fn&&String(ex.text||'').trim()) drawCurve(ex);
+  });
+  // 多边形
+  g.objs.forEach(function(o){
+    if(o.type!=='polygon') return;
+    const P=o.pts.map(function(n){return pts[n];});
+    if(P.some(function(q){return !q;})) return;
+    ctx.beginPath();
+    ctx.moveTo(toX(P[0].x),toY(P[0].y));
+    for(let i=1;i<P.length;i++) ctx.lineTo(toX(P[i].x),toY(P[i].y));
+    ctx.closePath();
+    ctx.fillStyle=rgbaOf(o.color,0.10);
+    ctx.fill();
+    ctx.strokeStyle=o.color;ctx.lineWidth=2;
+    ctx.stroke();
+  });
+  // 圆
+  g.objs.forEach(function(o){
+    if(o.type!=='circle') return;
+    const c=pts[o.c],p=pts[o.p];
+    if(!c||!p) return;
+    const r=Math.sqrt((p.x-c.x)*(p.x-c.x)+(p.y-c.y)*(p.y-c.y));
+    if(!r) return;
+    ctx.beginPath();
+    ctx.arc(toX(c.x),toY(c.y),r*S.view.unit,0,Math.PI*2);
+    ctx.strokeStyle=o.color;ctx.lineWidth=2;ctx.stroke();
+  });
+  // 圆的半径 / 直径（勾选后作为线段显示在图中）
+  g.objs.forEach(function(o){
+    if(o.type!=='circle') return;
+    if(!o.showR&&!o.showD) return;
+    const c=pts[o.c],p=pts[o.p];
+    if(!c||!p) return;
+    const cx=toX(c.x),cy=toY(c.y),px=toX(p.x),py=toY(p.y);
+    ctx.save();
+    ctx.strokeStyle=o.color;ctx.lineWidth=1.8;
+    if(o.showR){
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(px,py);
+      ctx.setLineDash([7,4]);ctx.stroke();
+    }
+    if(o.showD){
+      ctx.beginPath();ctx.setLineDash([2,3]);
+      ctx.moveTo(px,py);ctx.lineTo(cx*2-px,cy*2-py);
+      ctx.stroke();
+    }
+    ctx.restore();
+  });
+  // 线段 / 直线
+  g.objs.forEach(function(o){
+    if(o.type!=='segment'&&o.type!=='line') return;
+    const a=pts[o.a],b=pts[o.b];
+    if(!a||!b) return;
+    let ax=toX(a.x),ay=toY(a.y),bx=toX(b.x),by=toY(b.y);
+    if(o.type==='line'){
+      const dx=bx-ax,dy=by-ay,L=Math.sqrt(dx*dx+dy*dy)||1;
+      const k=(W+H)*1.4/L;
+      ax-=dx*k;ay-=dy*k;bx+=dx*k;by+=dy*k;
+    }
+    ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);
+    ctx.strokeStyle=o.color;ctx.lineWidth=2;ctx.stroke();
+  });
+  // 角
+  g.objs.forEach(function(o){
+    if(o.type!=='angle') return;
+    const a=pts[o.a],v=pts[o.v],b=pts[o.b];
+    if(!a||!v||!b) return;
+    const vx=toX(v.x),vy=toY(v.y);
+    const a1=Math.atan2(toY(a.y)-vy,toX(a.x)-vx);
+    const a2=Math.atan2(toY(b.y)-vy,toX(b.x)-vx);
+    let d=a2-a1;
+    while(d<=-Math.PI) d+=Math.PI*2;
+    while(d>Math.PI) d-=Math.PI*2;
+    const rr=26;
+    ctx.beginPath();
+    if(d>=0) ctx.arc(vx,vy,rr,a1,a1+d);
+    else ctx.arc(vx,vy,rr,a2,a2-d);
+    ctx.strokeStyle=o.color;ctx.lineWidth=1.8;ctx.stroke();
+    const mA=a1+d*0.5,label=geoObjValue(o,pts).replace('= ','');
+    ctx.font='600 11.5px -apple-system,"Segoe UI","PingFang SC",sans-serif';
+    ctx.fillStyle=o.color;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(label,vx+Math.cos(mA)*(rr+16),vy+Math.sin(mA)*(rr+16));
+  });
+  // 点
+  g.objs.forEach(function(o){
+    if(o.type!=='point') return;
+    const q=pts[o.name];
+    if(!q) return;
+    const px=toX(q.x),py=toY(q.y);
+    ctx.beginPath();ctx.arc(px,py,13,0,Math.PI*2);
+    ctx.fillStyle=rgbaOf(o.color,0.17);ctx.fill();
+    ctx.beginPath();ctx.arc(px,py,5.4,0,Math.PI*2);
+    ctx.fillStyle=o.color;ctx.fill();
+    ctx.lineWidth=1.7;ctx.strokeStyle='#fff';ctx.stroke();
+    if(o.label){
+      ctx.font='600 13px -apple-system,"Segoe UI","PingFang SC",sans-serif';
+      ctx.fillStyle=o.color;ctx.textAlign='left';ctx.textBaseline='alphabetic';
+      ctx.fillText(o.name,px+8,py-9);
+    }
+  });
+  // 待选点提示
+  g.pend.forEach(function(n){
+    const q=pts[n];
+    if(!q) return;
+    ctx.beginPath();ctx.arc(toX(q.x),toY(q.y),9.5,0,Math.PI*2);
+    ctx.strokeStyle='#2f6bdb';ctx.lineWidth=2;ctx.stroke();
+  });
+  if(!g.objs.length&&!hasGeoCurves()){
+    drawHintText(S.geo.tool==='point'?'点击画布添加点':'选一个工具，在画布上点击作图','下方表达式既可以是函数（sin(x)），也可以是几何对象');
+  }
+  ctx.restore();
+}
+
+/* ================= 历史记录 ================= */
+let history=[],hi=0,histTimer=0,idSeq=1;
+function snapshot(){
+  return JSON.stringify({
+    e:S.exprs.map(function(e){ return {text:e.text,color:e.color}; }),
+    g:S.geo.objs.map(function(o){
+      const c={};
+      Object.keys(o).forEach(function(k){ if(k!=='err') c[k]=o[k]; });
+      return c;
+    })
+  });
+}
+function updateHistBtns(){
+  $('#btn-undo').disabled=hi<=0;
+  $('#btn-redo').disabled=hi>=history.length-1;
+}
+function commit(){
+  const s=snapshot();
+  if(!history.length){ history=[s];hi=0;updateHistBtns();return; }
+  if(history[hi]===s){ updateHistBtns();return; }
+  history=history.slice(0,hi+1);
+  history.push(s);
+  hi=history.length-1;
+  if(history.length>70){ history.shift();hi--; }
+  updateHistBtns();
+}
+function scheduleCommit(){
+  clearTimeout(histTimer);
+  histTimer=setTimeout(commit,450);
+}
+function applySnapshot(str){
+  let o;
+  try{ o=JSON.parse(str); }catch(err){ return; }
+  if(Array.isArray(o)) o={e:o,g:[]};
+  S.exprs=(o.e||[]).map(function(x){
+    return {id:++idSeq,text:x.text,color:x.color,fn:null,err:null};
+  });
+  if(!S.exprs.length) S.exprs=[{id:++idSeq,text:'',color:COLORS[0],fn:null,err:null}];
+  S.geo.objs=(o.g||[]).map(function(x){
+    x.oid=++idSeq;
+    x.err=null;
+    if(x.type==='point'&&!x.name) x.name=geoNextName();
+    return x;
+  });
+  S.geo.pend=[];
+  S.exprs.forEach(recompile);
+  // 撤销后函数 id 会重排，把“函数上的点”重新挂回对应表达式
+  S.geo.objs.forEach(function(o){
+    if(o.type!=='point'||!o.on||o.on.k!=='curve') return;
+    const ref=String(o.on.ref||'').trim();
+    let ex=null;
+    S.exprs.forEach(function(e){ if(!ex&&String(e.body||'').trim()===ref) ex=e; });
+    if(!ex) S.exprs.forEach(function(e){ if(!ex&&String(e.text||'').trim()===ref) ex=e; });
+    if(ex){ o.on.id=ex.id; o.on.ref=ex.body||ex.text; }
+  });
+  S.activeId=S.exprs[0]?S.exprs[0].id:null;
+  renderRows();refreshErrBar();requestDraw();
+}
+function undo(){
+  clearTimeout(histTimer);
+  if(hi>0){ hi--;applySnapshot(history[hi]);updateHistBtns(); }
+}
+function redo(){
+  clearTimeout(histTimer);
+  if(hi<history.length-1){ hi++;applySnapshot(history[hi]);updateHistBtns(); }
+}
+
+/* ================= 表达式行 ================= */
+const rowsEl=$('#rows');
+
+const CLR_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6l-12 12"/></svg>';
+const ICON_CURVE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 15.5c3.2 0 3.2-7 7-7s3.8 7 7 7 4-2.6 7-2.6"/></svg>';
+const ICON_SURF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.6c3-3.2 6 2.4 9 0s6-3.4 9 .4"/><path d="M3 15.4c3-3.2 6 2.4 9 0s6-3.4 9 .4"/><path d="M3 8.6v6.8M12 8.6v6.8M21 9v6.8"/></svg>';
+const ICON_SEG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 19L19 5"/></svg>';
+const ICON_CIRC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="7.6"/></svg>';
+const ICON_POLY='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 4.2l7.6 5.4-2.9 8.8H7.3L4.4 9.6z"/></svg>';
+const ICON_ANG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 19l14-12"/><path d="M9 19l7-6"/></svg>';
+const ICON_MID='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 18l16-12"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>';
+const ICON_PT='<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.3" fill="#fff"/><circle cx="12" cy="12" r="7.4" stroke="#fff" stroke-opacity=".55" stroke-width="1.7"/></svg>';
+
+function badgeFor(type){
+  if(type==='surface') return ICON_SURF;
+  if(type==='curve') return ICON_CURVE;
+  if(type==='segment'||type==='line') return ICON_SEG;
+  if(type==='circle') return ICON_CIRC;
+  if(type==='polygon') return ICON_POLY;
+  if(type==='angle') return ICON_ANG;
+  if(type==='mid') return ICON_MID;
+  return '';
+}
+
+function recompile(ex){
+  const mode=(S.tab==='three')?'three':'func';
+  if(!String(ex.text||'').trim()){ ex.fn=null;ex.err=null;ex.dom=null;ex.body='';return; }
+  const r=compileText(ex.text,mode);
+  ex.fn=r.fn||null;
+  ex.err=r.err||null;
+  ex.dom=r.dom||null;
+  ex.body=r.body||'';
+}
+function markActive(){
+  Array.from(rowsEl.querySelectorAll('.row')).forEach(function(row){
+    const on=(S.tab==='geo')
+      ?(row.dataset.oid!==undefined
+          ?Number(row.dataset.oid)===S.activeId
+          :Number(row.dataset.id)===S.activeId)
+      :(Number(row.dataset.id)===S.activeId);
+    row.classList.toggle('is-active',on);
+    const f=row.querySelector('.field');
+    if(f) f.classList.toggle('is-active',on);
+  });
+}
+function refreshErrBar(){
+  const bar=$('#errbar');
+  let bad=(S.tab==='geo')
+    ?S.geo.objs.filter(function(o){ return o.err; })
+    :S.exprs.filter(function(e){ return e.err; });
+  if(S.tab==='geo') bad=bad.concat(S.exprs.filter(function(e){ return e.err; }));
+  if(!bad.length){
+    bar.classList.remove('on');
+    bar.textContent='';
+    return;
+  }
+  const first=bad[0];
+  let msg;
+  if(S.tab==='geo'&&first.type){
+    const fCount=S.exprs.filter(function(e){ return String(e.text||'').trim(); }).length;
+    const idx=S.geo.objs.indexOf(first);
+    msg='第 '+(fCount+idx+1)+' 行：'+first.err;
+  }else{
+    msg='第 '+(S.exprs.indexOf(first)+1)+' 行：'+first.err;
+  }
+  if(bad.length>1) msg+='（另有 '+(bad.length-1)+' 处有误）';
+  bar.textContent=msg;
+  bar.classList.add('on');
+}
+
+function rowShell(num){
+  const row=document.createElement('div');
+  row.className='row';
+  const n=document.createElement('div');
+  n.className='rownum';
+  n.textContent=String(num);
+  row.appendChild(n);
+  return row;
+}
+function rowBadge(row,color,icon,title){
+  const sw=document.createElement('button');
+  sw.type='button';
+  sw.className='swatch';
+  sw.title=title||'切换颜色';
+  sw.style.setProperty('--c',color);
+  const bd=document.createElement('span');
+  bd.className='badge';
+  bd.innerHTML=icon;
+  sw.appendChild(bd);
+  row.appendChild(sw);
+  return sw;
+}
+
+function numShort(v){
+  if(typeof v!=='number'||!isFinite(v)) return '∞';
+  return String(Math.round(v*1000)/1000);
+}
+function bracketOf(lo,hi,loOpen,hiOpen){
+  const a=(typeof lo==='number')?numShort(lo):'-∞';
+  const b=(typeof hi==='number')?numShort(hi):'∞';
+  return (loOpen?'(':'[')+a+','+b+(hiOpen?')':']');
+}
+function rangeLabel(ex){
+  const d=ex.dom||{};
+  const hx=(typeof d.xLo==='number'||typeof d.xHi==='number');
+  const hy=(typeof d.yLo==='number'||typeof d.yHi==='number');
+  if(!hx&&!hy) return '范围';
+  const p=[];
+  if(hx) p.push('x'+bracketOf(d.xLo,d.xHi,d.xLoOpen,d.xHiOpen));
+  if(hy) p.push('y'+bracketOf(d.yLo,d.yHi,d.yLoOpen,d.yHiOpen));
+  return p.join(' ');
+}
+function openDomSheet(ex,input,btn){
+  const d=ex.dom||{};
+  const is3=(S.tab==='three');
+  function grpHTML(k,lo,hi,loO,hiO){
+    return '<div class="dom-grp" data-g="'+k+'">'+
+      '<div class="dom-line"><span class="dom-var">'+k+'</span>'+
+      '<input class="dom-in" type="text" inputmode="decimal" data-k="lo" placeholder="起点，留空=不限" value="'+(typeof lo==='number'?numShort(lo):'')+'">'+
+      '<span class="dom-arrow">→</span>'+
+      '<input class="dom-in" type="text" inputmode="decimal" data-k="hi" placeholder="终点，留空=不限" value="'+(typeof hi==='number'?numShort(hi):'')+'">'+
+      '</div>'+
+      '<div class="dom-flags"><label><input type="checkbox" data-k="loOpen"'+(loO?' checked':'')+'>起点不含</label>'+
+      '<label><input type="checkbox" data-k="hiOpen"'+(hiO?' checked':'')+'>终点不含</label></div>'+
+      '</div>';
+  }
+  openSheet('自变量取值范围',
+    grpHTML('x',d.xLo,d.xHi,d.xLoOpen,d.xHiOpen)+
+    (is3?grpHTML('y',d.yLo,d.yHi,d.yLoOpen,d.yHiOpen):'')+
+    '<p class="dom-tip">'+(is3?'曲面的定义域是 x、y 的一块矩形区域。':'只画这段范围内的曲线，端点实心表示包含、空心表示不包含。')+
+    '也可以直接在表达式里写 <b>sin(x), -2&lt;=x&lt;=3</b>'+(is3?' 或 <b>-2&lt;=x&lt;=2, -1&lt;=y&lt;=1</b>':'')+'</p>'+
+    '<div class="sheet-btns"><button data-act="apply" class="wide">应用</button>'+
+    '<button data-act="clear">清除范围</button><button data-act="cancel">取消</button></div>',
+    function(sheet){
+      function readSegs(){
+        const segs=[];
+        let bad='';
+        Array.from(sheet.querySelectorAll('.dom-grp')).forEach(function(g){
+          if(bad) return;
+          const k=g.dataset.g;
+          const loTxt=g.querySelector('input[data-k="lo"]').value.trim();
+          const hiTxt=g.querySelector('input[data-k="hi"]').value.trim();
+          const loO=g.querySelector('input[data-k="loOpen"]').checked;
+          const hiO=g.querySelector('input[data-k="hiOpen"]').checked;
+          if(!loTxt&&!hiTxt) return;
+          let lo=null,hi=null;
+          if(loTxt){ lo=evalConst(loTxt); if(lo===null){ bad=loTxt; return; } }
+          if(hiTxt){ hi=evalConst(hiTxt); if(hi===null){ bad=hiTxt; return; } }
+          let lt=loTxt, ht=hiTxt;
+          if(lo!==null&&hi!==null&&lo>hi){
+            const t=lo;lo=hi;hi=t; lt=numShort(lo); ht=numShort(hi);
+          }
+          const op1=loO?'<':'<=', op2=hiO?'<':'<=';
+          if(lt&&ht) segs.push(lt+op1+k+op2+ht);
+          else if(lt) segs.push(k+(loO?'>':'>=')+lt);
+          else segs.push(k+(hiO?'<':'<=')+ht);
+        });
+        return {segs:segs,bad:bad};
+      }
+      function apply(segs){
+        const body=String(ex.body||'').trim();
+        if(!body){ toast('先输入一个表达式'); return; }
+        ex.text=body+(segs.length?(', '+segs.join(', ')):'');
+        if(input) input.value=ex.text;
+        recompile(ex);
+        if(btn){
+          btn.textContent=rangeLabel(ex);
+          btn.classList.toggle('on',!!ex.dom);
+          btn.hidden=!ex.text.trim();
+        }
+        if(input&&input.closest('.row')) input.closest('.row').classList.toggle('is-error',!!ex.err);
+        refreshErrBar();
+        requestDraw();
+        updateReadout();
+        commit();
+        closeSheet();
+        toast(ex.dom?'已设置范围 '+rangeLabel(ex):'已清除范围');
+      }
+      sheet.querySelector('[data-act="apply"]').addEventListener('click',function(){
+        const r=readSegs();
+        if(r.bad){ toast('“'+r.bad+'” 不是有效数值'); return; }
+        apply(r.segs);
+      });
+      sheet.querySelector('[data-act="clear"]').addEventListener('click',function(){ apply([]); });
+      sheet.querySelector('[data-act="cancel"]').addEventListener('click',closeSheet);
+    });
+}
+
+function openShapeSheet(){
+  const items=[
+    ['square','正方形','点两个相邻顶点，自动补齐另外两个'],
+    ['rect','长方形','点两个对角顶点，自动补齐另外两个'],
+    ['para','平行四边形','点三个相邻顶点，自动补齐第四个'],
+    ['tri','三角形','点三个顶点，连成三角形'],
+    ['poly','任意多边形','连续点若干点，再点回第一个点闭合']
+  ];
+  const list=items.map(function(it){
+    return '<button class="shape-opt'+(S.geo.shape===it[0]?' is-on':'')+'" data-shape="'+it[0]+'">'+
+      '<b>'+it[1]+'</b><span>'+it[2]+'</span></button>';
+  }).join('');
+  openSheet('绘制多边形',
+    '<div class="shape-list">'+list+'</div>'+
+    '<p class="dom-tip">选好形状后在画布上按提示点击；生成的点和多边形会自动出现在下方，并显示周长、面积与形状判定。</p>'+
+    '<div class="sheet-btns"><button class="wide" data-act="cancel">取消</button></div>',
+    function(sheet){
+      Array.from(sheet.querySelectorAll('.shape-opt')).forEach(function(b){
+        b.addEventListener('click',function(){
+          S.geo.shape=b.dataset.shape;
+          S.geo.pend=[];
+          S.geo.pbase=null;
+          const hint=shapeHint(S.geo.shape);
+          closeSheet();
+          toast(hint);
+          const cap=$('#caption');
+          if(cap&&S.tab==='geo') cap.textContent=hint;
+          requestDraw();
+        });
+      });
+      sheet.querySelector('[data-act="cancel"]').addEventListener('click',closeSheet);
+    });
+}
+
+function renderRows(){
+  if(S.tab==='geo'){ renderGeoRows(); return; }
+  const focused=document.activeElement&&document.activeElement.closest&&document.activeElement.closest('.row');
+  const fid=focused?Number(focused.dataset.id):null;
+  rowsEl.innerHTML='';
+  S.exprs.forEach(function(ex,i){
+    const row=rowShell(i+1);
+    row.dataset.id=String(ex.id);
+    if(ex.id===S.activeId) row.classList.add('is-active');
+    if(ex.err) row.classList.add('is-error');
+
+    const sw=rowBadge(row,ex.color,(S.tab==='three')?ICON_SURF:ICON_CURVE);
+    sw.addEventListener('click',function(){
+      const k=COLORS.indexOf(ex.color);
+      ex.color=COLORS[(k+1)%COLORS.length];
+      sw.style.setProperty('--c',ex.color);
+      S.activeId=ex.id;
+      markActive();
+      requestDraw();
+      updateReadout();
+      commit();
+    });
+
+    const field=document.createElement('div');
+    field.className='field'+(ex.id===S.activeId?' is-active':'');
+
+    const input=document.createElement('input');
+    input.type='text';
+    input.value=ex.text;
+    input.spellcheck=false;
+    input.autocomplete='off';
+    input.setAttribute('autocapitalize','off');
+    input.placeholder=(i===0)
+      ?(S.tab==='three'?'例如 sin(x)*cos(y)':'例如 sin(x)、x^2、abs(x)')
+      :(S.tab==='three'?'再输入一个曲面':'再输入一个函数');
+    const dombtn=document.createElement('button');
+    dombtn.type='button';
+    dombtn.className='dombtn';
+    dombtn.title='设置自变量取值范围';
+    dombtn.textContent=rangeLabel(ex);
+    if(ex.dom) dombtn.classList.add('on');
+    dombtn.hidden=!String(ex.text||'').trim();
+    dombtn.addEventListener('click',function(){ openDomSheet(ex,input,dombtn); });
+
+    input.addEventListener('input',function(){
+      ex.text=input.value;
+      S.activeId=ex.id;
+      markActive();
+      recompile(ex);
+      row.classList.toggle('is-error',!!ex.err);
+      dombtn.hidden=!String(ex.text||'').trim();
+      dombtn.textContent=rangeLabel(ex);
+      dombtn.classList.toggle('on',!!ex.dom);
+      refreshErrBar();
+      requestDraw();
+      updateReadout();
+      scheduleCommit();
+    });
+    input.addEventListener('focus',function(){
+      S.activeId=ex.id;
+      markActive();
+    });
+    input.addEventListener('keydown',function(ev){
+      if(ev.key==='Enter'){ ev.preventDefault();addRow(); }
+    });
+
+    const clr=document.createElement('button');
+    clr.type='button';
+    clr.className='clr';
+    clr.title='清空内容；空行时删除这一行';
+    clr.innerHTML=CLR_ICON;
+    clr.addEventListener('click',function(){
+      if(ex.text){
+        ex.text='';
+        input.value='';
+        recompile(ex);
+        row.classList.remove('is-error');
+        refreshErrBar();
+        requestDraw();
+        updateReadout();
+        commit();
+        input.focus();
+      }else if(S.exprs.length>1){
+        removeRow(ex.id);
+      }
+    });
+
+    field.appendChild(input);
+    field.appendChild(dombtn);
+    field.appendChild(clr);
+    row.appendChild(field);
+    rowsEl.appendChild(row);
+  });
+  if(fid!==null) focusRow(fid);
+}
+
+/* ---------- 几何式行 ---------- */
+function geoPickColor(type){
+  if(type==='point'){
+    const n=S.geo.objs.filter(function(o){ return o.type==='point'; }).length;
+    return GDOT[n%GDOT.length];
+  }
+  const n=S.geo.objs.filter(function(o){ return o.type!=='point'; }).length;
+  return GSHAPE[n%GSHAPE.length];
+}
+function resolveCurveRef(ref){
+  const t=String(ref||'').trim();
+  if(!t) return null;
+  let ex=null;
+  S.exprs.forEach(function(e){ if(!ex&&String(e.body||'').trim()===t) ex=e; });
+  if(!ex) S.exprs.forEach(function(e){ if(!ex&&String(e.text||'').trim()===t) ex=e; });
+  if(!ex){
+    ex={id:++idSeq,text:t,color:COLORS[S.exprs.length%COLORS.length],fn:null,err:null};
+    S.exprs.push(ex);
+    recompile(ex);
+    if(!ex.fn){ S.exprs.pop(); return null; }
+  }
+  return ex;
+}
+function geoFromDef(def){
+  const o={oid:++idSeq,color:geoPickColor(def.type),label:true,err:null};
+  if(def.type==='point'){
+    o.type='point';
+    o.name=def.name||geoNextName();
+    o.x=(def.x===undefined?0:def.x);
+    o.y=(def.y===undefined?0:def.y);
+    o.dep=def.dep?{k:'mid',a:def.dep.a,b:def.dep.b}:null;
+    if(def.dep) o.color='#9254de';
+    if(def.on){
+      o.dep=null;
+      if(def.on.k==='seg'){
+        o.on={k:'seg',a:def.on.a,b:def.on.b,line:geoIsLine(def.on.a,def.on.b)};
+        o.t=(def.t==null?0.5:def.t);
+      }else if(def.on.k==='circ'){
+        o.on={k:'circ',c:def.on.c,p:def.on.p,ang:(def.ang==null?0:def.ang)};
+      }else{
+        const ex=resolveCurveRef(def.on.ref);
+        if(!ex||!ex.fn) return null;
+        let xv=S.view.cx;
+        if(ex.dom&&typeof ex.dom.xLo==='number') xv=Math.max(xv,ex.dom.xLo);
+        if(ex.dom&&typeof ex.dom.xHi==='number') xv=Math.min(xv,ex.dom.xHi);
+        o.on={k:'curve',id:ex.id,ref:ex.body||ex.text,x:xv};
+      }
+    }
+  }else{
+    o.type=def.type;
+    if(def.type==='polygon') o.pts=def.pts.slice();
+    else{ o.a=def.a;o.b=def.b;o.c=def.c;o.p=def.p;o.v=def.v; }
+  }
+  return o;
+}
+function geoAddObj(o){
+  S.geo.objs.push(o);
+  S.activeId=o.oid;
+  return o;
+}
+function geoAddPoint(x,y,color){
+  const o={oid:++idSeq,type:'point',name:geoNextName(),x:x,y:y,dep:null,label:true,err:null,
+    color:color||geoPickColor('point')};
+  geoAddObj(o);
+  return o.name;
+}
+
+function angleDeg(o,pts){
+  pts=pts||geoSolve();
+  const a=pts[o.a],v=pts[o.v],b=pts[o.b];
+  if(!a||!v||!b) return NaN;
+  const u1=[a.x-v.x,a.y-v.y],u2=[b.x-v.x,b.y-v.y];
+  const l1=Math.sqrt(u1[0]*u1[0]+u1[1]*u1[1]),l2=Math.sqrt(u2[0]*u2[0]+u2[1]*u2[1]);
+  if(!l1||!l2) return NaN;
+  const cosv=clamp((u1[0]*u2[0]+u1[1]*u2[1])/(l1*l2),-1,1);
+  return Math.acos(cosv)*180/Math.PI;
+}
+function setCircleR(o,val,isDia){
+  const r=isDia?val/2:val;
+  if(!isFinite(val)||!(r>1e-6)){ toast('半径要是一个大于 0 的数'); return false; }
+  const pts=geoSolve();
+  const c=pts[o.c],p=pts[o.p];
+  if(!c||!p){ toast('圆心或圆上的点还没算出来'); return false; }
+  let dx=p.x-c.x,dy=p.y-c.y;
+  const L=Math.sqrt(dx*dx+dy*dy);
+  if(L<1e-9){ dx=1;dy=0; }
+  const ux=dx/(L<1e-9?1:L),uy=dy/(L<1e-9?1:L);
+  let pp=null;
+  for(let i=0;i<S.geo.objs.length;i++){
+    const x=S.geo.objs[i];
+    if(x.type==='point'&&x.name===o.p){ pp=x;break; }
+  }
+  if(!pp||pp.on||pp.dep){ toast('圆上的这个点被其它对象约束，改不了圆的半径'); return false; }
+  pp.x=c.x+ux*r;
+  pp.y=c.y+uy*r;
+  syncGeoRows();
+  toast('已把圆的'+(isDia?'直径':'半径')+'改为 '+len2(isDia?r*2:r));
+  return true;
+}
+function setAngleDeg(o,T){
+  const pts=geoSolve();
+  const A=pts[o.a],V=pts[o.v],B=pts[o.b];
+  if(!A||!V||!B){ toast('角的三个点还没算出来'); return false; }
+  if(!(T>0.01)||!(T<179.99)){ toast('角度要大于 0 且小于 180 度'); return false; }
+  const th=angleDeg(o,pts);
+  if(!isFinite(th)){ toast('这个角还算不出来'); return false; }
+  const findPt=function(n){
+    for(let i=0;i<S.geo.objs.length;i++){
+      const x=S.geo.objs[i];
+      if(x.type==='point'&&x.name===n) return x;
+    }
+    return null;
+  };
+  const free=function(x){ return x&&!x.on&&!x.dep; };
+  const bpt=findPt(o.b),apt=findPt(o.a);
+  if(!free(bpt)&&!free(apt)){ toast('这个角的两条边都被其它对象约束，改不了角度'); return false; }
+  const w=[B.x-V.x,B.y-V.y];
+  const u=[A.x-V.x,A.y-V.y];
+  const cross=u[0]*w[1]-u[1]*w[0];
+  const sgn=(cross>=0)?1:-1;
+  const delta=(T-th)*Math.PI/180*sgn;
+  const c=Math.cos(delta),s=Math.sin(delta);
+  if(free(bpt)){
+    bpt.x=V.x+w[0]*c-w[1]*s;
+    bpt.y=V.y+w[0]*s+w[1]*c;
+  }else{
+    const c2=Math.cos(-delta),s2=Math.sin(-delta);
+    apt.x=V.x+u[0]*c2-u[1]*s2;
+    apt.y=V.y+u[0]*s2+u[1]*c2;
+  }
+  syncGeoRows();
+  toast('角 '+o.a+o.v+o.b+' 已改为 '+fmtNum(T,1)+'°');
+  return true;
+}
+function setSegLen(o,l){
+  const pts=geoSolve();
+  const A=pts[o.a],B=pts[o.b];
+  if(!A||!B){ toast('线段端点还没算出来'); return false; }
+  if(!(l>1e-9)){ toast('长度要大于 0'); return false; }
+  const dx=B.x-A.x,dy=B.y-A.y;
+  const L=Math.sqrt(dx*dx+dy*dy);
+  if(L<1e-9){ toast('两个端点重合了，无法确定方向'); return false; }
+  const ux=dx/L,uy=dy/L;
+  const findPt=function(n){
+    for(let i=0;i<S.geo.objs.length;i++){
+      const x=S.geo.objs[i];
+      if(x.type==='point'&&x.name===n) return x;
+    }
+    return null;
+  };
+  const bpt=findPt(o.b),apt=findPt(o.a);
+  const free=function(x){ return x&&!x.on&&!x.dep; };
+  if(free(bpt)){ bpt.x=A.x+ux*l; bpt.y=A.y+uy*l; }
+  else if(free(apt)){ apt.x=B.x-ux*l; apt.y=B.y-uy*l; }
+  else{ toast('这条线段的两端都被其它对象约束，改不了长度'); return false; }
+  syncGeoRows();
+  toast('线段 '+o.a+o.b+' 的长度改为 '+len2(l));
+  return true;
+}
+function geoRowValText(o){
+  if(o.type==='point'&&o.dep&&o.dep.k==='mid'){
+    const pts=geoSolve(),m=pts[o.name];
+    return m?'= ('+fmtNum(m.x,2)+', '+fmtNum(m.y,2)+')':'';
+  }
+  const pts=geoSolve();
+  return geoObjValue(o,pts);
+}
+
+function geoFuncRow(ex,num){
+  const row=rowShell(num);
+  row.dataset.id=String(ex.id);
+  if(ex.id===S.activeId) row.classList.add('is-active');
+  if(ex.err) row.classList.add('is-error');
+
+  const sw=rowBadge(row,ex.color,ICON_CURVE);
+  sw.addEventListener('click',function(){
+    openColorSheet(ex.color,COLORS,function(c){
+      ex.color=c;
+      S.activeId=ex.id;
+      markActive();
+      renderGeoRows();
+      requestDraw();
+      commit();
+    });
+  });
+
+  const field=document.createElement('div');
+  field.className='field'+(ex.id===S.activeId?' is-active':'');
+
+  const input=document.createElement('input');
+  input.type='text';
+  input.value=ex.text;
+  input.spellcheck=false;
+  input.autocomplete='off';
+  input.setAttribute('autocapitalize','off');
+  input.placeholder='例如 sin(x)、x^2';
+
+  const dombtn=document.createElement('button');
+  dombtn.type='button';
+  dombtn.className='dombtn';
+  dombtn.title='设置自变量取值范围';
+  dombtn.textContent=rangeLabel(ex);
+  dombtn.hidden=!String(ex.text||'').trim();
+  if(ex.dom) dombtn.classList.add('on');
+  dombtn.addEventListener('click',function(){ openDomSheet(ex,input,dombtn); });
+
+  input.addEventListener('input',function(){
+    ex.text=input.value;
+    S.activeId=ex.id;
+    markActive();
+    recompile(ex);
+    row.classList.toggle('is-error',!!ex.err);
+    dombtn.hidden=!String(ex.text||'').trim();
+    dombtn.textContent=rangeLabel(ex);
+    dombtn.classList.toggle('on',!!ex.dom);
+    refreshErrBar();
+    requestDraw();
+    scheduleCommit();
+  });
+  input.addEventListener('focus',function(){ S.activeId=ex.id;markActive(); });
+  input.addEventListener('keydown',function(ev){
+    if(ev.key==='Enter'){ ev.preventDefault(); input.blur(); }
+  });
+
+  const clr=document.createElement('button');
+  clr.type='button';
+  clr.className='clr';
+  clr.title='删除这个函数';
+  clr.innerHTML=CLR_ICON;
+  clr.addEventListener('click',function(){ geoRemoveExpr(ex.id); });
+
+  field.appendChild(input);
+  field.appendChild(dombtn);
+  field.appendChild(clr);
+  row.appendChild(field);
+  return row;
+}
+
+function renderGeoRows(){
+  const g=S.geo;
+  rowsEl.innerHTML='';
+  const fEx=S.exprs.filter(function(e){ return String(e.text||'').trim(); });
+  fEx.forEach(function(ex,i){ rowsEl.appendChild(geoFuncRow(ex,i+1)); });
+  g.objs.forEach(function(o,j){
+    const row=rowShell(fEx.length+j+1);
+    row.dataset.oid=String(o.oid);
+    if(o.oid===S.activeId) row.classList.add('is-active');
+    if(o.err) row.classList.add('is-error');
+
+    const icon=(o.type==='point')?((o.dep&&o.dep.k==='mid')?ICON_MID:ICON_PT):badgeFor(o.type);
+    const sw=rowBadge(row,o.color,icon);
+    sw.addEventListener('click',function(){
+      const pool=(o.type==='point')?GDOT:GSHAPE;
+      openColorSheet(o.color,pool,function(c){
+        o.color=c;
+        S.activeId=o.oid;
+        markActive();
+        renderGeoRows();
+        requestDraw();
+        commit();
+      });
+    });
+
+    const field=document.createElement('div');
+    field.className='field'+(o.oid===S.activeId?' is-active':'');
+
+    const input=document.createElement('input');
+    input.type='text';
+    input.value=geoObjLabel(o);
+    input.spellcheck=false;
+    input.autocomplete='off';
+    input.setAttribute('autocapitalize','off');
+    input.addEventListener('focus',function(){ S.activeId=o.oid;markActive(); });
+    input.addEventListener('keydown',function(ev){
+      if(ev.key==='Enter'){
+        ev.preventDefault();
+        geoApplyText(o,input.value,input);
+        input.blur();
+      }
+    });
+    input.addEventListener('blur',function(){
+      if(input.value!==geoObjLabel(o,geoSolve())) geoApplyText(o,input.value,input);
+    });
+
+    const val=document.createElement('span');
+    val.className='val';
+    if(o.type==='segment'){
+      const pts0=geoSolve();
+      const A0=pts0[o.a],B0=pts0[o.b];
+      const lenv=(A0&&B0)?Math.sqrt((B0.x-A0.x)*(B0.x-A0.x)+(B0.y-A0.y)*(B0.y-A0.y)):0;
+      const eq=document.createElement('span');
+      eq.className='veq';
+      eq.textContent='=';
+      val.appendChild(eq);
+      const li=document.createElement('input');
+      li.type='text';
+      li.className='lenin';
+      li.inputMode='decimal';
+      li.value=len2(lenv);
+      li.title='改这个数值：回车后线段按原方向伸缩到该长度';
+      let applied=false;
+      const applyLen=function(){
+        if(applied) return;
+        const n=parseFloat(normGeoText(li.value));
+        if(!isFinite(n)){ toast('长度要是一个数'); li.value=len2(lenv); return; }
+        applied=true;
+        if(!setSegLen(o,n)){ applied=false; li.value=len2(lenv); }
+      };
+      li.addEventListener('keydown',function(ev){
+        if(ev.key==='Enter'){ ev.preventDefault(); applyLen(); li.blur(); }
+      });
+      li.addEventListener('blur',function(){ if(li.value!==len2(lenv)) applyLen(); });
+      val.appendChild(li);
+    }else if(o.type==='angle'){
+      const deg=angleDeg(o);
+      const eq=document.createElement('span');
+      eq.className='veq';
+      eq.textContent='=';
+      val.appendChild(eq);
+      const ai=document.createElement('input');
+      ai.type='text';
+      ai.className='lenin degin';
+      ai.inputMode='decimal';
+      ai.value=isFinite(deg)?fmtNum(deg,1):'';
+      ai.title='改这个数值：回车后角的边会旋转到该角度';
+      let done=false;
+      const applyDeg=function(){
+        if(done) return;
+        const n=parseFloat(normGeoText(ai.value));
+        if(!isFinite(n)){ toast('角度要是一个数'); ai.value=isFinite(deg)?fmtNum(deg,1):''; return; }
+        done=true;
+        if(!setAngleDeg(o,n)){ done=false; ai.value=isFinite(deg)?fmtNum(deg,1):''; }
+      };
+      ai.addEventListener('keydown',function(ev){
+        if(ev.key==='Enter'){ ev.preventDefault(); applyDeg(); ai.blur(); }
+      });
+      ai.addEventListener('blur',function(){
+        if(!done&&ai.value!==(isFinite(deg)?fmtNum(deg,1):'')) applyDeg();
+      });
+      val.appendChild(ai);
+      const de=document.createElement('span');
+      de.className='degsign';
+      de.textContent='°';
+      val.appendChild(de);
+    }else{
+      val.textContent=(o.type==='circle')?'':geoRowValText(o);
+    }
+
+    const clr=document.createElement('button');
+    clr.type='button';
+    clr.className='clr';
+    clr.title='删除这个对象';
+    clr.innerHTML=CLR_ICON;
+    clr.addEventListener('click',function(){ geoRemoveObj(o.oid); });
+
+    field.appendChild(input);
+    field.appendChild(val);
+    field.appendChild(clr);
+    row.appendChild(field);
+
+    if(o.type==='point'){
+      const sub=document.createElement('div');
+      sub.className='sub';
+      const lb=document.createElement('label');
+      const cb=document.createElement('input');
+      cb.type='checkbox';
+      cb.checked=!!o.label;
+      cb.addEventListener('change',function(){
+        o.label=cb.checked;
+        requestDraw();
+        commit();
+      });
+      lb.appendChild(cb);
+      lb.appendChild(document.createTextNode('标签'));
+      sub.appendChild(lb);
+      row.appendChild(sub);
+    }else if(o.type==='polygon'){
+      const info=polyInfoText(o,geoSolve());
+      if(info){
+        const sub=document.createElement('div');
+        sub.className='sub';
+        const tag=document.createElement('span');
+        tag.className='gtag';
+        tag.textContent=info;
+        sub.appendChild(tag);
+        row.appendChild(sub);
+      }
+    }else if(o.type==='circle'){
+      const ptsC=geoSolve();
+      const c0=ptsC[o.c],p0=ptsC[o.p];
+      const rv=(c0&&p0)?Math.sqrt((p0.x-c0.x)*(p0.x-c0.x)+(p0.y-c0.y)*(p0.y-c0.y)):0;
+      const sub=document.createElement('div');
+      sub.className='sub circ-sub';
+      const mkRow=function(text,key,val,isDia){
+        const cr=document.createElement('div');
+        cr.className='circ-row';
+        const lb=document.createElement('label');
+        const cb=document.createElement('input');
+        cb.type='checkbox';
+        cb.checked=!!o[key];
+        cb.addEventListener('change',function(){
+          o[key]=cb.checked;
+          requestDraw();
+          commit();
+        });
+        lb.appendChild(cb);
+        lb.appendChild(document.createTextNode(text));
+        cr.appendChild(lb);
+        const eq=document.createElement('span');
+        eq.className='ceq';
+        eq.textContent='=';
+        cr.appendChild(eq);
+        const inp=document.createElement('input');
+        inp.type='text';
+        inp.className='cirin';
+        inp.inputMode='decimal';
+        inp.value=len2(val);
+        inp.title=isDia?'改这个直径可以改变圆的大小':'改这个半径可以改变圆的大小';
+        let done=false;
+        const apply=function(){
+          if(done) return;
+          const n=parseFloat(normGeoText(inp.value));
+          if(!isFinite(n)){ toast('要输入一个数'); inp.value=len2(val); return; }
+          done=true;
+          if(!setCircleR(o,n,isDia)){ done=false; inp.value=len2(val); }
+        };
+        inp.addEventListener('keydown',function(ev){
+          if(ev.key==='Enter'){ ev.preventDefault(); apply(); inp.blur(); }
+        });
+        inp.addEventListener('blur',function(){ if(!done&&inp.value!==len2(val)) apply(); });
+        cr.appendChild(inp);
+        return cr;
+      };
+      sub.appendChild(mkRow('半径','showR',rv,false));
+      sub.appendChild(mkRow('直径','showD',rv*2,true));
+      row.appendChild(sub);
+    }
+    rowsEl.appendChild(row);
+  });
+
+  // 末尾空行：用于输入新对象或新函数
+  const row=rowShell(fEx.length+g.objs.length+1);
+  row.dataset.oid='0';
+  rowBadge(row,'#c3c8d0','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg>','输入新对象或函数');
+  const field=document.createElement('div');
+  field.className='field';
+  const input=document.createElement('input');
+  input.type='text';
+  input.value='';
+  input.spellcheck=false;
+  input.autocomplete='off';
+  input.setAttribute('autocapitalize','off');
+  input.placeholder='输入函数 sin(x)，或对象 A=(1,2)';
+  input.addEventListener('focus',function(){ S.activeId=null;markActive(); });
+  input.addEventListener('keydown',function(ev){
+    if(ev.key!=='Enter') return;
+    ev.preventDefault();
+    const txt=input.value.trim();
+    if(!txt) return;
+    const def=parseGeoDef(txt);
+    if(def){
+      const pts=geoSolve();
+      const miss=(def.refs||[]).filter(function(n){ return !pts[n]; });
+      if(miss.length){ toast('点 '+miss[0]+' 还没有定义'); return; }
+      if(def.type==='point'&&def.name){
+        const same=S.geo.objs.filter(function(o){ return o.type==='point'&&o.name===def.name; })[0];
+        if(same){
+          if(def.x!==undefined){
+            same.x=def.x;same.y=def.y;same.on=null;same.dep=null;same.t=null;delete same.err;
+            toast('已把点 '+same.name+' 移到 ('+dnum(same.x)+', '+dnum(same.y)+')');
+          }else if(def.on){
+            geoApplyText(same,txt);
+          }else{
+            toast('已经有点 '+def.name+' 了');
+          }
+          input.value='';
+          renderGeoRows();requestDraw();commit();
+          const a2=rowsEl.querySelector('.row[data-oid="0"] input');
+          if(a2) a2.focus();
+          return;
+        }
+      }
+      const dup=S.geo.objs.filter(function(o){ return geoSameDef(o,def); })[0];
+      if(dup){
+        toast('已经有'+(dup.type==='segment'?'线段 ':dup.type==='line'?'直线 ':'这个图形 ')+geoShapeName(dup)+' 了');
+        return;
+      }
+      const o=geoFromDef(def);
+      if(!o){ toast('看不懂这个写法'); return; }
+      geoAddObj(o);
+    }else{
+      const ex={id:++idSeq,text:txt,color:COLORS[S.exprs.length%COLORS.length],fn:null,err:null};
+      recompile(ex);
+      if(!ex.fn){ toast('看不懂这个写法'); return; }
+      S.exprs.push(ex);
+      S.activeId=ex.id;
+    }
+    input.value='';
+    renderGeoRows();
+    requestDraw();
+    commit();
+    const again=rowsEl.querySelector('.row[data-oid="0"] input');
+    if(again) again.focus();
+  });
+  field.appendChild(input);
+  row.appendChild(field);
+  rowsEl.appendChild(row);
+  app.classList.toggle('geo-empty',g.objs.length===0&&!hasGeoCurves());
+  const cnt=$('#geo-count');
+  if(cnt) cnt.textContent=String(g.objs.length+fEx.length);
+}
+
+function geoApplyText(o,text,input){
+  const def=parseGeoDef(text);
+  const isPointRow=(o.type==='point');
+  const snap=function(){ if(input) input.value=geoObjLabel(o,geoSolve()); };
+  if(isPointRow&&o.dep&&o.dep.k!=='mid'){
+    toast('这个点是垂线/平行线自动算出来的，不能改坐标');
+    snap();
+    return;
+  }
+  if(!isPointRow&&o.dep){
+    toast('垂线/平行线随基准线自动变化，改写法请删掉这一行再重画');
+    snap();
+    return;
+  }
+  if(!def){
+    toast(isPointRow?'坐标写法要像 A=(1,2) 或 (1,2)':'写法无法识别');
+    snap();
+    return;
+  }
+  if(isPointRow&&def.type!=='point'){ toast('这一行是一个点，写法要像 A=(1,2)'); snap(); return; }
+  if(!isPointRow&&def.type==='point'){ toast('这一行是图形，删掉后可在下方新加一个点'); snap(); return; }
+  if((def.type==='segment'||def.type==='line')&&def.a===def.b){ toast('两个点重合了，换个点'); snap(); return; }
+  if(def.name&&def.name!==o.name){
+    const dup=S.geo.objs.some(function(x){ return x!==o&&x.type==='point'&&x.name===def.name; });
+    if(dup){ toast('已经有点 '+def.name+' 了'); snap(); return; }
+  }
+  const pts=geoSolve();
+  const miss=(def.refs||[]).filter(function(n){ return !pts[n]; });
+  if(miss.length){ toast('点 '+miss[0]+' 还没有定义'); snap(); return; }
+  delete o.err;
+  if(def.type==='point'){
+    const oldX=(o.on&&o.on.k==='curve'&&typeof o.on.x==='number')?o.on.x:null;
+    o.type='point';
+    o.dep=def.dep?{k:'mid',a:def.dep.a,b:def.dep.b}:null;
+    o.on=null;
+    if(def.on){
+      o.dep=null;
+      if(def.on.k==='seg'){
+        o.on={k:'seg',a:def.on.a,b:def.on.b,line:geoIsLine(def.on.a,def.on.b)};
+        if(o.t==null) o.t=0.5;
+      }else if(def.on.k==='circ'){
+        const oldAng=(o.on&&o.on.k==='circ'&&typeof o.on.ang==='number')?o.on.ang:0;
+        o.on={k:'circ',c:def.on.c,p:def.on.p,ang:oldAng};
+      }else{
+        const ex=resolveCurveRef(def.on.ref);
+        if(!ex||!ex.fn){ toast('函数无法识别'); snap(); return; }
+        o.on={k:'curve',id:ex.id,ref:ex.body||ex.text,x:(oldX!==null?oldX:S.view.cx)};
+      }
+    }
+    if(def.x!==undefined){
+      // 直接写坐标：变成自由点，位置按输入值
+      o.x=def.x;o.y=def.y;o.on=null;o.dep=null;o.t=null;
+    }
+    o.name=def.name||o.name;
+    if(o.dep){ o.color='#9254de'; }
+  }else{
+    o.type=def.type;
+    if(def.type==='polygon') o.pts=def.pts.slice();
+    else{ o.a=def.a;o.b=def.b;o.c=def.c;o.p=def.p;o.v=def.v; }
+  }
+  refreshErrBar();
+  renderGeoRows();
+  requestDraw();
+  commit();
+}
+function geoRefs(o){
+  if(o.type==='point'){
+    if(o.on&&o.on.k==='seg') return [o.on.a,o.on.b];
+    if(o.on&&o.on.k==='circ') return [o.on.c,o.on.p];
+    return o.dep?[o.dep.a,o.dep.b]:[];
+  }
+  if(o.type==='segment'||o.type==='line') return o.dep?[o.dep.pt,o.dep.a,o.dep.b]:[o.a,o.b];
+  if(o.type==='circle') return [o.c,o.p];
+  if(o.type==='polygon') return o.pts.slice();
+  if(o.type==='angle') return [o.a,o.v,o.b];
+  return [];
+}
+function geoRemoveExpr(id){
+  const kill={};
+  S.geo.objs.forEach(function(o){
+    if(o.type==='point'&&o.on&&o.on.k==='curve'&&o.on.id===id) kill[o.oid]=1;
+  });
+  S.geo.objs=S.geo.objs.filter(function(o){ return !kill[o.oid]; });
+  S.exprs=S.exprs.filter(function(e){ return e.id!==id; });
+  if(!S.exprs.length) S.exprs.push({id:++idSeq,text:'',color:COLORS[0],fn:null,err:null,dom:null,body:''});
+  if(S.activeId===id) S.activeId=null;
+  renderRows();refreshErrBar();requestDraw();commit();
+}
+function geoRemoveObj(oid){
+  const o=S.geo.objs.filter(function(x){ return x.oid===oid; })[0];
+  if(!o) return;
+  const kill={};
+  kill[oid]=1;
+  const gone={};
+  if(o.type==='point') gone[o.name]=1;
+  let changed=true;
+  while(changed){
+    changed=false;
+    S.geo.objs.forEach(function(x){
+      if(kill[x.oid]) return;
+      const refs=geoRefs(x);
+      for(let i=0;i<refs.length;i++){
+        if(gone[refs[i]]){
+          kill[x.oid]=1;
+          if(x.type==='point') gone[x.name]=1;
+          changed=true;
+          break;
+        }
+      }
+    });
+    S.geo.objs.forEach(function(x){
+      if(kill[x.oid]) return;
+      if(x.type!=='point'||!x.on||x.on.k!=='seg') return;
+      const dead=S.geo.objs.some(function(s){
+        return kill[s.oid]&&(s.type==='segment'||s.type==='line')&&s.a===x.on.a&&s.b===x.on.b;
+      });
+      if(dead){ kill[x.oid]=1;gone[x.name]=1;changed=true; }
+    });
+    S.geo.objs.forEach(function(x){
+      if(kill[x.oid]) return;
+      if(x.type!=='point'||!x.on||x.on.k!=='circ') return;
+      const dead=S.geo.objs.some(function(s){
+        return kill[s.oid]&&s.type==='circle'&&s.c===x.on.c&&s.p===x.on.p;
+      });
+      if(dead){ kill[x.oid]=1;gone[x.name]=1;changed=true; }
+    });
+  }
+  S.geo.objs=S.geo.objs.filter(function(x){ return !kill[x.oid]; });
+  S.geo.pend=S.geo.pend.filter(function(n){ return !gone[n]; });
+  if(kill[S.activeId]) S.activeId=null;
+  refreshErrBar();
+  renderGeoRows();
+  requestDraw();
+  commit();
+}
+
+function focusRow(id){
+  let row=rowsEl.querySelector('.row[data-oid="'+id+'"]');
+  if(!row) row=rowsEl.querySelector('.row[data-id="'+id+'"]');
+  if(!row) return;
+  const input=row.querySelector('input');
+  if(input){ input.focus();input.setSelectionRange(input.value.length,input.value.length); }
+}
+function addRow(){
+  if(S.tab==='geo'){
+    const last=rowsEl.querySelector('.row[data-oid="0"] input');
+    if(last){ last.focus(); return; }
+  }
+  const last=S.exprs[S.exprs.length-1];
+  if(last&&!String(last.text||'').trim()){ S.activeId=last.id;markActive();focusRow(last.id);return; }
+  const ex={id:++idSeq,text:'',color:COLORS[S.exprs.length%COLORS.length],fn:null,err:null};
+  S.exprs.push(ex);
+  S.activeId=ex.id;
+  renderRows();refreshErrBar();requestDraw();focusRow(ex.id);commit();
+}
+function removeRow(id){
+  if(S.exprs.length<=1) return;
+  S.exprs=S.exprs.filter(function(e){ return e.id!==id; });
+  if(!S.exprs.some(function(e){ return e.id===S.activeId; })) S.activeId=S.exprs[0].id;
+  renderRows();refreshErrBar();requestDraw();updateReadout();commit();
+}
+
+
+/* ================= 键盘输入 ================= */
+function activeInput(){
+  const a=document.activeElement;
+  if(a&&a.tagName==='INPUT'&&a.closest('.rows')) return a;
+  const rows=Array.from(rowsEl.querySelectorAll('.row'));
+  for(let i=0;i<rows.length;i++){
+    if(S.tab==='geo'){
+      const oid=rows[i].dataset.oid;
+      if(oid!==undefined){
+        if(Number(oid)===S.activeId) return rows[i].querySelector('input');
+      }else if(Number(rows[i].dataset.id)===S.activeId){
+        return rows[i].querySelector('input');
+      }
+    }else if(Number(rows[i].dataset.id)===S.activeId){
+      return rows[i].querySelector('input');
+    }
+  }
+  const zero=rowsEl.querySelector('.row[data-oid="0"] input');
+  if(zero) return zero;
+  return rowsEl.querySelector('input');
+}
+function insertText(txt){
+  const inp=activeInput();
+  if(!inp) return;
+  if(document.activeElement!==inp) inp.focus();
+  const st=(inp.selectionStart===null||inp.selectionStart===undefined)?inp.value.length:inp.selectionStart;
+  const en=(inp.selectionEnd===null||inp.selectionEnd===undefined)?st:inp.selectionEnd;
+  inp.value=inp.value.slice(0,st)+txt+inp.value.slice(en);
+  const pos=st+txt.length;
+  inp.setSelectionRange(pos,pos);
+  inp.dispatchEvent(new Event('input'));
+}
+function deleteChar(){
+  const inp=activeInput();
+  if(!inp) return;
+  const st=(inp.selectionStart===null||inp.selectionStart===undefined)?inp.value.length:inp.selectionStart;
+  const en=(inp.selectionEnd===null||inp.selectionEnd===undefined)?st:inp.selectionEnd;
+  if(st!==en){
+    inp.value=inp.value.slice(0,st)+inp.value.slice(en);
+    inp.setSelectionRange(st,st);
+  }else if(st>0){
+    inp.value=inp.value.slice(0,st-1)+inp.value.slice(st);
+    inp.setSelectionRange(st-1,st-1);
+  }else{
+    return;
+  }
+  inp.dispatchEvent(new Event('input'));
+}
+function moveCaret(dir){
+  const inp=activeInput();
+  if(!inp) return;
+  if(document.activeElement!==inp) inp.focus();
+  const st=(inp.selectionStart===null||inp.selectionStart===undefined)?0:inp.selectionStart;
+  const pos=Math.max(0,Math.min(inp.value.length,st+dir));
+  inp.setSelectionRange(pos,pos);
+}
+function onReturn(){
+  if(S.tab==='geo'){
+    const inp=activeInput();
+    if(inp) inp.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+    return;
+  }
+  const inp=activeInput();
+  if(inp&&String(inp.value).trim()) addRow();
+  else if(inp) inp.blur();
+}
+
+/* ================= 按键音 ================= */
+let audioCtx=null;
+function beep(){
+  if(!S.sound) return;
+  try{
+    if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended') audioCtx.resume();
+    const t=audioCtx.currentTime;
+    const o=audioCtx.createOscillator();
+    const g=audioCtx.createGain();
+    o.type='triangle';
+    o.frequency.value=920;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.05,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.08);
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.start(t);
+    o.stop(t+0.09);
+  }catch(err){}
+}
+function toggleSound(){
+  S.sound=!S.sound;
+  $('#btn-sound').style.color=S.sound?'#2f6bdb':'';
+  toast(S.sound?'按键音已开启':'按键音已关闭');
+}
+
+/* ================= 字母键盘 ================= */
+function buildLetters(){
+  const kb=$('#kb-let');
+  const chars='abcdefghijklmnopqrstuvwxyz'.split('');
+  chars.forEach(function(ch){
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='key';
+    b.dataset.ins=ch;
+    b.textContent=ch;
+    kb.appendChild(b);
+  });
+  const extra=[
+    ['act','del',''],['ins','(','('],['ins',')',')'],['ins',',',','],
+    ['ins','^','aᵇ'],['ins','^2','a²'],['ins','sqrt(','√'],['ins','π','π'],
+    ['act','num','123'],['act','ret','']
+  ];
+  extra.forEach(function(it){
+    const b=document.createElement('button');
+    b.type='button';
+    if(it[0]==='ins'){
+      b.className='key';
+      b.dataset.ins=it[1];
+      b.innerHTML=it[2];
+    }else if(it[1]==='del'){
+      b.className='key fn';
+      b.dataset.act='del';
+      b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 5H9l-6 7 6 7h11a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="M13 9l5 6M18 9l-5 6"/></svg>';
+    }else if(it[1]==='num'){
+      b.className='key fn';
+      b.dataset.act='letters';
+      b.id='btn-abc2';
+      b.textContent='123';
+    }else{
+      b.className='key ret';
+      b.dataset.act='ret';
+      b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 7v5a3 3 0 0 1-3 3H6"/><path d="M10 11l-4 4 4 4"/></svg>';
+    }
+    kb.appendChild(b);
+  });
+}
+function toggleLetters(){
+  const toLet=(S.kbMode==='num');
+  S.kbMode=toLet?'let':'num';
+  $('#kb-num').hidden=toLet;
+  $('#kb-let').hidden=!toLet;
+  const label=toLet?'123':'ABC';
+  $('#btn-abc').textContent=label;
+  const b2=$('#btn-abc2');
+  if(b2) b2.textContent=label;
+}
+
+/* ================= 弹层 / 提示 ================= */
+const overlay=$('#overlay');
+let toastTimer=0;
+function toast(msg){
+  const t=$('#toast');
+  t.textContent=msg;
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){ t.classList.remove('on'); },2000);
+}
+function openSheet(title,bodyHTML,mount){
+  overlay.innerHTML='<div class="sheet" role="dialog" aria-modal="true"><div class="sh-head"><h3>'+title+
+    '</h3><button class="sh-close" aria-label="关闭">×</button></div><div class="sh-body">'+bodyHTML+'</div></div>';
+  overlay.classList.add('on');
+  overlay.setAttribute('aria-hidden','false');
+  overlay.querySelector('.sh-close').addEventListener('click',closeSheet);
+  if(mount) mount(overlay.querySelector('.sheet'));
+}
+function closeSheet(){
+  overlay.classList.remove('on');
+  overlay.setAttribute('aria-hidden','true');
+  overlay.innerHTML='';
+}
+overlay.addEventListener('click',function(e){
+  if(e.target===overlay) closeSheet();
+});
+
+function openColorSheet(cur,pool,onPick){
+  const extra=['#20242a','#5d6570','#e8710a','#8ab21b','#12b3a8','#8b5cf6','#c026d3','#e0426f'];
+  const all=[];
+  [].concat(pool||[],COLORS,extra).forEach(function(c){
+    if(c&&all.indexOf(c)<0) all.push(c);
+  });
+  openSheet('选择颜色',
+    '<div class="pal-grid">'+all.map(function(c){
+      return '<button class="pal-dot'+(c===cur?' is-on':'')+'" data-c="'+c+'" style="--c:'+c+'" aria-label="选择颜色 '+c+'"></button>';
+    }).join('')+'</div>'+
+    '<p class="dom-tip">点一下圆点就应用到这一行；直接关闭面板则保持原来的颜色。</p>',
+    function(sheet){
+      Array.from(sheet.querySelectorAll('.pal-dot')).forEach(function(b){
+        b.addEventListener('click',function(){
+          onPick(b.dataset.c);
+          closeSheet();
+        });
+      });
+    });
+}
+
+function updateRangeFab(){
+  const t=document.getElementById('range-txt');
+  if(!t) return;
+  const s='X±'+fmtNum(S.three.rx,1)+' Z±'+fmtNum(S.three.rz,1);
+  if(t.textContent!==s) t.textContent=s;
+}
+function open3DRange(){
+  const cur=function(k){ return fmtNum(S.three[k]||5,1); };
+  openSheet('3D 方框范围',
+    '<p class="dom-tip">方框三个方向都以原点为中心，这里填半长：填 5 表示该方向从 -5 到 5。</p>'+
+    '<div class="set-row"><span>X 方向半长</span><input class="set-num" inputmode="decimal" data-k="rx" value="'+cur('rx')+'"></div>'+
+    '<div class="set-row"><span>Y 方向（深度）半长</span><input class="set-num" inputmode="decimal" data-k="ry" value="'+cur('ry')+'"></div>'+
+    '<div class="set-row"><span>Z 方向（高度）半长</span><input class="set-num" inputmode="decimal" data-k="rz" value="'+cur('rz')+'"></div>'+
+    '<div class="sheet-btns"><button class="wide" data-act="apply">应用</button>'+
+    '<button class="wide" data-act="reset">恢复为 ±5</button></div>',
+    function(sheet){
+      const vals={};
+      const read=function(){
+        let bad=false;
+        Array.from(sheet.querySelectorAll('.set-num')).forEach(function(inp){
+          const n=parseFloat(inp.value);
+          if(!isFinite(n)||n<=0||n>50){ bad=true; return; }
+          vals[inp.dataset.k]=n;
+        });
+        return !bad;
+      };
+      sheet.querySelector('[data-act="apply"]').addEventListener('click',function(){
+        if(!read()){ toast('每个方向请填 0 到 50 之间的正数'); return; }
+        S.three.rx=vals.rx;S.three.ry=vals.ry;S.three.rz=vals.rz;
+        updateRangeFab();
+        requestDraw();
+        closeSheet();
+        toast('方框范围已更新');
+      });
+      sheet.querySelector('[data-act="reset"]').addEventListener('click',function(){
+        S.three.rx=5;S.three.ry=5;S.three.rz=5;
+        updateRangeFab();
+        requestDraw();
+        closeSheet();
+        toast('方框范围恢复为 ±5');
+      });
+      Array.from(sheet.querySelectorAll('.set-num')).forEach(function(inp){
+        inp.addEventListener('keydown',function(ev){
+          if(ev.key==='Enter'){ ev.preventDefault(); inp.blur(); }
+        });
+      });
+    });
+}
+function openSettings(){
+  const decOpts=[0,1,2,3,4].map(function(d){
+    return '<option value="'+d+'"'+(dg()===d?' selected':'')+'>'+d+' 位</option>';
+  }).join('');
+  openSheet('设置',
+    '<div class="set-row"><span>网格线</span><label class="switch"><input type="checkbox" data-key="showGrid"'+(S.showGrid?' checked':'')+'><i></i></label></div>'+
+    '<div class="set-row"><span>坐标轴刻度</span><label class="switch"><input type="checkbox" data-key="showLabels"'+(S.showLabels?' checked':'')+'><i></i></label></div>'+
+    '<div class="set-row"><span>悬停读数</span><label class="switch"><input type="checkbox" data-key="trace"'+(S.trace?' checked':'')+'><i></i></label></div>'+
+    '<div class="set-row"><span>点坐标小数位</span><select class="set-sel" data-key="dec">'+decOpts+'</select></div>'+
+    '<div class="sheet-btns"><button data-act="reset">重置视图</button><button data-act="export">导出图片</button>'+
+    '<button class="wide" data-act="size">恢复默认窗口尺寸</button>'+
+    '<button class="wide danger" data-act="clearAll">清空所有表达式</button></div>',
+    function(sheet){
+      Array.from(sheet.querySelectorAll('.switch input')).forEach(function(inp){
+        inp.addEventListener('change',function(){
+          S[inp.dataset.key]=inp.checked;
+          requestDraw();
+          updateReadout();
+        });
+      });
+      const sel=sheet.querySelector('.set-sel');
+      if(sel) sel.addEventListener('change',function(){
+        const d=parseInt(sel.value,10);
+        S.dec=(d>=0&&d<=4)?d:2;
+        try{ localStorage.setItem('fnplot.dec',String(S.dec)); }catch(err){}
+        if(S.tab==='geo') renderGeoRows();
+        updateReadout();
+        requestDraw();
+        toast('点坐标保留 '+S.dec+' 位小数');
+      });
+      Array.from(sheet.querySelectorAll('[data-act]')).forEach(function(b){
+        b.addEventListener('click',function(){
+          const a=b.dataset.act;
+          if(a==='reset'){ resetView();toast('视图已重置');closeSheet(); }
+          if(a==='export'){
+            try{
+              const link=document.createElement('a');
+              link.href=cv.toDataURL('image/png');
+              link.download='函数图像.png';
+              link.click();
+              toast('图片已导出到下载文件夹');
+            }catch(err){
+              toast('导出失败：'+err.message);
+            }
+            closeSheet();
+          }
+          if(a==='size'){ winReset(); toast('已恢复默认尺寸'); closeSheet(); }
+          if(a==='clearAll'){
+            if(!window.confirm('确定清空所有表达式和几何对象？')) return;
+            S.exprs=[{id:++idSeq,text:'',color:COLORS[0],fn:null,err:null}];
+            S.activeId=S.exprs[0].id;
+            S.geo.objs=[];S.geo.pend=[];
+            renderRows();refreshErrBar();requestDraw();commit();closeSheet();toast('已清空');
+          }
+        });
+      });
+    });
+}
+
+function openFunctions(){
+  const groups=[
+    {t:'三角与反三角',items:[['sin','sin'],['cos','cos'],['tan','tan'],['asin','asin'],['acos','acos'],['atan','atan']]},
+    {t:'指数、对数、根号',items:[['sqrt','√x'],['abs','|x|'],['exp','exp'],['ln','ln'],['log','log'],['log2','log₂']]},
+    {t:'取整与比较',items:[['floor','floor'],['ceil','ceil'],['round','round'],['sign','sign'],['max','max'],['min','min']]},
+    {t:'其他',items:[['mod','mod'],['pow','pow'],['π','π'],['e','e'],['^2','a²'],['(','(']]}
+  ];
+  let html='<div class="fn-groups">';
+  groups.forEach(function(g){
+    html+='<div class="fn-group"><h4>'+g.t+'</h4><div class="fn-grid">';
+    g.items.forEach(function(it){
+      const name=it[0],label=it[1];
+      const ins=(name==='π'||name==='e'||name==='^2'||name==='(')?name:(name+'(');
+      html+='<button data-ins="'+ins+'">'+label+'</button>';
+    });
+    html+='</div></div>';
+  });
+  html+='</div>';
+  openSheet('插入函数',html,function(sheet){
+    Array.from(sheet.querySelectorAll('.fn-grid button')).forEach(function(b){
+      b.addEventListener('click',function(){
+        insertText(b.dataset.ins);
+        closeSheet();
+      });
+    });
+  });
+}
+
+/* ================= 读数 ================= */
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function shrink(s){ return s.length>16?s.slice(0,15)+'…':s; }
+function updateReadout(){
+  const box=$('#readout');
+  if(!S.trace||S.tab!=='func'||!S.hover){
+    box.hidden=true;
+    box.innerHTML='';
+    return;
+  }
+  const px=clamp(S.hover.px,0,W);
+  const vars={x:worldX(px),y:0};
+  let html='<div class="ro-x">x = '+fmtNum(vars.x,2)+'</div>';
+  let n=0;
+  S.exprs.forEach(function(ex){
+    if(n>=4) return;
+    if(!ex.fn||!String(ex.text||'').trim()) return;
+    const d=ex.dom||{};
+    if(typeof d.xLo==='number'&&vars.x<d.xLo-1e-9) return;
+    if(typeof d.xHi==='number'&&vars.x>d.xHi+1e-9) return;
+    let y;
+    try{ y=ex.fn(vars); }catch(err){ return; }
+    if(!isFinite(y)) return;
+    html+='<div class="ro-line"><i style="background:'+ex.color+'"></i><span>'+
+      escapeHtml(shrink(String((ex.body||ex.text)).replace(/^y\s*=\s*/i,''))) + ' = ' + fmtNum(y,3)+'</span></div>';
+    n++;
+  });
+  box.innerHTML=html;
+  box.hidden=false;
+}
+
+/* ================= 模式切换 ================= */
+const CAPTIONS={
+  func:'拖动平移 · 滚轮或双指缩放',
+  three:'拖动旋转视角 · 滚轮缩放',
+  geo:'选工具作图 · 选择工具可拖动点'
+};
+function setTab(tab){
+  if(tab===S.tab) return;
+  S.tab=tab;
+  Array.from(document.querySelectorAll('.tab')).forEach(function(b){
+    const on=b.dataset.tab===tab;
+    b.classList.toggle('is-active',on);
+    b.setAttribute('aria-selected',on?'true':'false');
+  });
+  app.classList.toggle('mode-three',tab==='three');
+  app.classList.toggle('mode-geo',tab==='geo');
+  S.geo.pend=[];
+  S.geo.pbase=null;
+  const cap=$('#caption');
+  cap.textContent=CAPTIONS[tab]||'';
+  S.hover=null;
+  updateReadout();
+  S.exprs.forEach(recompile);
+  renderRows();
+  refreshErrBar();
+  updateRangeFab();
+  requestDraw();
+}
+
+/* ================= 交互 ================= */
+const ptrs=new Map();
+let act=null;
+function loc(e){
+  const r=cv.getBoundingClientRect();
+  return {x:e.clientX-r.left,y:e.clientY-r.top};
+}
+function dist(a,b){ return Math.sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y)); }
+cv.addEventListener('pointerdown',function(e){
+  if(e.pointerType==='mouse'&&e.button!==0) return;
+  try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+  const p=loc(e);
+  ptrs.set(e.pointerId,p);
+  if(ptrs.size===2){
+    const arr=Array.from(ptrs.values());
+    act={type:'pinch',d0:Math.max(1,dist(arr[0],arr[1])),u0:S.view.unit,cx0:S.view.cx,cy0:S.view.cy,
+      mid0:{x:(arr[0].x+arr[1].x)/2,y:(arr[0].y+arr[1].y)/2}};
+    return;
+  }
+  if(ptrs.size>2) return;
+  S.hover=null;
+  updateReadout();
+  if(S.tab==='geo'){
+    const hit=geoHitPoint(p);
+    if(hit&&S.geo.tool==='select'){
+      act={type:'pt',name:hit,moved:0};
+      requestDraw();
+      return;
+    }
+  }
+  if(S.tab==='three'){ act={type:'rot',x:p.x,y:p.y,az:S.three.az,pitch:S.three.pitch};return; }
+  act={type:'pan',x:p.x,y:p.y,cx:S.view.cx,cy:S.view.cy,moved:0};
+});
+
+cv.addEventListener('pointermove',function(e){
+  const p=loc(e);
+  if(ptrs.has(e.pointerId)) ptrs.set(e.pointerId,p);
+  if(act&&act.type==='pinch'&&ptrs.size>=2){
+    const arr=Array.from(ptrs.values());
+    const d=dist(arr[0],arr[1]);
+    const mid={x:(arr[0].x+arr[1].x)/2,y:(arr[0].y+arr[1].y)/2};
+    const wx=act.cx0+(act.mid0.x-W/2)/act.u0;
+    const wy=act.cy0-(act.mid0.y-H/2)/act.u0;
+    S.view.unit=clamp(act.u0*(d/act.d0),1.2,80000);
+    S.view.cx=wx-(mid.x-W/2)/S.view.unit;
+    S.view.cy=wy+(mid.y-H/2)/S.view.unit;
+    userView=true;
+    requestDraw();
+    return;
+  }
+  if(act&&act.type==='pan'){
+    S.view.cx=act.cx-(p.x-act.x)/S.view.unit;
+    S.view.cy=act.cy+(p.y-act.y)/S.view.unit;
+    act.moved=Math.max(act.moved,dist(p,{x:act.x,y:act.y}));
+    if(act.moved>4) userView=true;
+    requestDraw();
+    return;
+  }
+  if(act&&act.type==='rot'){
+    S.three.az=act.az-(p.x-act.x)*0.011;
+    S.three.pitch=clamp(act.pitch+(p.y-act.y)*0.007,0.03,1.56);
+    requestDraw();
+    return;
+  }
+  if(act&&act.type==='pt'){
+    const o=S.geo.objs.filter(function(x){ return x.type==='point'&&x.name===act.name; })[0];
+    if(o&&o.on){
+      geoDragOnObj(o,p.x,p.y,geoSolve());
+      act.moved=(act.moved||0)+1;
+      requestDraw();
+      return;
+    }
+    if(o&&!(o.dep&&o.dep.k==='mid')){
+      o.x=worldX(p.x);o.y=worldY(p.y);
+      act.moved=(act.moved||0)+1;
+      requestDraw();
+      return;
+    }
+    act={type:'pan',x:p.x,y:p.y,cx:S.view.cx,cy:S.view.cy,moved:0};
+  }
+  if(S.tab==='func'&&e.pointerType==='mouse'){
+    S.hover={px:p.x,py:p.y};
+    requestDraw();
+    updateReadout();
+  }
+});
+
+function endPointer(e){
+  const was=act;
+  ptrs.delete(e.pointerId);
+  if(was&&was.type==='pt'){
+    if(was.moved){ renderGeoRows(); commit(); }
+  }
+  if(was&&was.type==='pan'&&was.moved<6&&S.tab==='geo'){
+    geoTap({x:was.x,y:was.y});
+  }
+  act=null;
+  if(ptrs.size===1){
+    const arr=Array.from(ptrs.values());
+    act={type:'pan',x:arr[0].x,y:arr[0].y,cx:S.view.cx,cy:S.view.cy,moved:0};
+  }
+}
+cv.addEventListener('pointerup',endPointer);
+cv.addEventListener('pointercancel',function(e){
+  ptrs.delete(e.pointerId);
+  act=null;
+});
+cv.addEventListener('pointerleave',function(){
+  if(act) return;
+  S.hover=null;
+  updateReadout();
+  requestDraw();
+});
+cv.addEventListener('wheel',function(e){
+  e.preventDefault();
+  const p=loc(e);
+  const dir=e.deltaY>0?-1:1;
+  if(S.tab==='three'){
+    S.three.scale=clamp(S.three.scale*(dir>0?1.09:1/1.09),0.45,4);
+    requestDraw();
+    return;
+  }
+  zoomAt(p.x,p.y,dir>0?1.12:1/1.12);
+},{passive:false});
+
+/* ================= 绑定控件 ================= */
+function bindKeys(){
+  Array.from(document.querySelectorAll('.key')).forEach(function(btn){
+    btn.addEventListener('click',function(){
+      const ins=btn.dataset.ins;
+      const a=btn.dataset.act;
+      if(ins!==undefined) insertText(ins);
+      else if(a==='del') deleteChar();
+      else if(a==='left') moveCaret(-1);
+      else if(a==='right') moveCaret(1);
+      else if(a==='ret') onReturn();
+      else if(a==='fn') openFunctions();
+      else if(a==='letters') toggleLetters();
+      else if(a==='sound') toggleSound();
+      beep();
+    });
+  });
+}
+
+function bindUI(){
+  Array.from(document.querySelectorAll('.tab')).forEach(function(b){
+    b.addEventListener('click',function(){ setTab(b.dataset.tab); });
+  });
+  $('#btn-add').addEventListener('click',function(){ addRow(); });
+  $('#btn-undo').addEventListener('click',undo);
+  $('#btn-redo').addEventListener('click',redo);
+  $('#btn-gear').addEventListener('click',openSettings);
+  $('#btn-3drange').addEventListener('click',open3DRange);
+  $('#btn-settings').addEventListener('click',openSettings);
+  $('#btn-kb').addEventListener('click',function(){
+    if(S.tab==='geo'){
+      const on=!app.classList.contains('kb-geo');
+      app.classList.toggle('kb-geo',on);
+      toast(on?'键盘已展开':'键盘已收起');
+      requestDraw();
+      return;
+    }
+    S.kbVisible=!S.kbVisible;
+    app.classList.toggle('kb-off',!S.kbVisible);
+    const svg=this.querySelector('svg');
+    if(svg) svg.style.transform=S.kbVisible?'':'rotate(180deg)';
+    toast(S.kbVisible?'键盘已展开':'键盘已收起');
+  });
+  Array.from($('#zoomctl').querySelectorAll('button')).forEach(function(b){
+    b.addEventListener('click',function(){
+      const a=b.dataset.zoom;
+      if(a==='in'){
+        if(S.tab==='three'){ S.three.scale=clamp(S.three.scale*1.12,0.45,4);requestDraw(); }
+        else zoomAt(W/2,H/2,1.25);
+      }else if(a==='out'){
+        if(S.tab==='three'){ S.three.scale=clamp(S.three.scale/1.12,0.45,4);requestDraw(); }
+        else zoomAt(W/2,H/2,0.8);
+      }else{
+        resetView();
+        S.three.scale=1;S.three.az=-0.62;S.three.pitch=0.6;
+        requestDraw();
+      }
+    });
+  });
+  const geoUndo=function(){
+    if(!S.geo.objs.length){ toast('还没有几何对象');return; }
+    geoRemoveObj(S.geo.objs[S.geo.objs.length-1].oid);
+  };
+  Array.from($('#geobar').querySelectorAll('.gtool')).forEach(function(b){
+    b.addEventListener('click',function(){
+      S.geo.tool=b.dataset.tool;
+      S.geo.pend=[];
+      S.geo.pbase=null;
+      Array.from($('#geobar').querySelectorAll('.gtool')).forEach(function(x){
+        x.classList.toggle('is-on',x===b);
+      });
+      requestDraw();
+      if(b.dataset.tool==='polygon'){ openShapeSheet(null); return; }
+      const tip={
+        select:'点选拖动：拖动已有的点改变图形',
+        point:'点工具：点击画布添加点',
+        segment:'线段：依次点两个点',
+        circle:'圆：先点圆心，再点圆上一点',
+        angle:'角：依次点三个点（第二个是顶点）',
+        polygon:'多边形：先选形状，再按提示点出顶点',
+        midpoint:'中点：点两个点，生成它们的中点',
+        perp:'垂线：先点一条线段或直线，再点一个点，过该点作垂线',
+        parallel:'平行线：先点一条线段或直线，再点一个点，过该点作平行线',
+        onobj:'对象上的点：点一下函数曲线、线段或圆，生成只能在该对象上滑动的点'
+      }[b.dataset.tool];
+      if(tip){
+        toast(tip);
+        const cap=$('#caption');
+        if(cap&&S.tab==='geo') cap.textContent=tip;
+      }
+    });
+  });
+  Array.from($('#viewctl').querySelectorAll('button')).forEach(function(b){
+    b.addEventListener('click',function(){
+      const v=b.dataset.view;
+      S.three.view=v;
+      if(v==='grid'){ S.three.pitch=1.54;S.three.az=0; }
+      else{ S.three.pitch=0.6;S.three.az=-0.62; }
+      Array.from($('#viewctl').querySelectorAll('button')).forEach(function(x){
+        x.classList.toggle('is-on',x.dataset.view===v);
+      });
+      requestDraw();
+    });
+  });
+  $('#btn-home').addEventListener('click',function(){
+    resetView();
+    S.three.az=-0.62;S.three.pitch=0.6;S.three.scale=1;S.three.view='3d';
+    Array.from($('#viewctl').querySelectorAll('button')).forEach(function(x){
+      x.classList.toggle('is-on',x.dataset.view==='3d');
+    });
+    requestDraw();
+  });
+}
+
+/* ================= 窗口尺寸：拖动四边/四角缩放 ================= */
+const WIN_KEY='fnplot.winsize';
+let winCustom=false, winState=null;
+
+function winClamp(w,h){
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const minW=Math.min(340,vw), minH=Math.min(480,vh);
+  const maxW=Math.max(minW,vw-14), maxH=Math.max(minH,vh-14);
+  return {w:Math.round(clamp(w,minW,maxW)),h:Math.round(clamp(h,minH,maxH))};
+}
+function winApply(w,h,ox,oy,persist){
+  const s=winClamp(w,h);
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const lx=Math.max(0,(vw-s.w)/2-6), ly=Math.max(0,(vh-s.h)/2-6);
+  const x=clamp(ox||0,-lx,lx), y=clamp(oy||0,-ly,ly);
+  winCustom=true;
+  winState={w:s.w,h:s.h,ox:x,oy:y};
+  app.style.setProperty('--aw',s.w+'px');
+  app.style.setProperty('--ah',s.h+'px');
+  app.style.left=x+'px';
+  app.style.top=y+'px';
+  app.classList.add('is-win');
+  syncHandles();
+  requestDraw();
+  if(persist){
+    try{ localStorage.setItem(WIN_KEY,JSON.stringify(winState)); }catch(err){}
+  }
+  return winState;
+}
+function winReset(){
+  winCustom=false;
+  winState=null;
+  app.style.removeProperty('--aw');
+  app.style.removeProperty('--ah');
+  app.style.left='';
+  app.style.top='';
+  app.classList.remove('is-win');
+  try{ localStorage.removeItem(WIN_KEY); }catch(err){}
+  syncHandles();
+  requestDraw();
+}
+function syncHandles(){
+  const on=winCustom||window.innerWidth>=640;
+  app.classList.toggle('rz-on',on);
+}
+function restoreWinSize(){
+  let saved=null;
+  try{ saved=JSON.parse(localStorage.getItem(WIN_KEY)||'null'); }catch(err){ saved=null; }
+  if(saved&&saved.w&&saved.h) winApply(saved.w,saved.h,saved.ox||0,saved.oy||0,false);
+}
+function bindResize(){
+  Array.from(app.querySelectorAll('.rz')).forEach(function(handle){
+    handle.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0) return;
+      e.preventDefault();
+      const dir=handle.dataset.dir;
+      const r=app.getBoundingClientRect();
+      const st={
+        x:e.clientX,y:e.clientY,w:r.width,h:r.height,
+        ox:parseFloat(app.style.left||'0')||0,
+        oy:parseFloat(app.style.top||'0')||0
+      };
+      app.classList.add('is-win','resizing');
+      winCustom=true;
+      try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+      const onMove=function(ev){
+        const dx=ev.clientX-st.x, dy=ev.clientY-st.y;
+        let w=st.w, h=st.h;
+        if(dir.indexOf('e')>=0) w=st.w+dx;
+        if(dir.indexOf('w')>=0) w=st.w-dx;
+        if(dir.indexOf('n')>=0) h=st.h-dy;
+        if(dir.indexOf('s')>=0) h=st.h+dy;
+        const s=winClamp(w,h);
+        /* 保持被拖动的对边不动：东/南方向为正，西/北方向为负 */
+        const sx=dir.indexOf('e')>=0?1:(dir.indexOf('w')>=0?-1:0);
+        const sy=dir.indexOf('s')>=0?1:(dir.indexOf('n')>=0?-1:0);
+        winApply(s.w,s.h,st.ox+sx*(s.w-st.w)/2,st.oy+sy*(s.h-st.h)/2,false);
+      };
+      const onUp=function(){
+        handle.removeEventListener('pointermove',onMove);
+        handle.removeEventListener('pointerup',onUp);
+        handle.removeEventListener('pointercancel',onUp);
+        app.classList.remove('resizing');
+        const r2=app.getBoundingClientRect();
+        try{
+          localStorage.setItem(WIN_KEY,JSON.stringify({
+            w:Math.round(r2.width),h:Math.round(r2.height),
+            ox:parseFloat(app.style.left||'0')||0,
+            oy:parseFloat(app.style.top||'0')||0
+          }));
+        }catch(err){}
+      };
+      handle.addEventListener('pointermove',onMove);
+      handle.addEventListener('pointerup',onUp);
+      handle.addEventListener('pointercancel',onUp);
+    });
+  });
+  window.addEventListener('resize',function(){
+    syncHandles();
+    if(winCustom&&winState) winApply(winState.w,winState.h,winState.ox,winState.oy,false);
+  });
+}
+
+/* ================= 启动 ================= */
+function init(){
+  buildLetters();
+  bindKeys();
+  bindUI();
+  renderRows();
+  refreshErrBar();
+  commit();
+  $('#caption').textContent=CAPTIONS.func;
+  resize();
+  restoreWinSize();
+  requestDraw();
+  bindResize();
+  syncHandles();
+  if(window.ResizeObserver){
+    window.__ro=new ResizeObserver(function(){ requestDraw(); });
+    window.__ro.observe($('#stage'));
+  }
+  window.addEventListener('resize',function(){ requestDraw(); });
+  window.addEventListener('orientationchange',function(){ requestDraw(); });
+}
+init();
+</script>
+<script>
+if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
